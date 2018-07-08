@@ -1,12 +1,17 @@
 #include "log.h"
-#include "load.h"
+#include "config.h"
 #include "init.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <sys/param.h>
 #include <string.h>
 #include <dirent.h>
 #include <wordexp.h>
+
+static const char *configdirs[] = {
+	"./tests"
+};
 
 static char **
 expand_arguments(const char *args) {
@@ -44,14 +49,13 @@ expand_arguments(const char *args) {
 #define SECTION_CONFIG	0
 #define SECTION_STARTUP	1
 
-int
+static int
 configure(struct daemon *daemon,
 	FILE *filep) {
 	int section = SECTION_CONFIG;
 	ssize_t length;
 	char *line = NULL;
 	size_t linecap = 0;
-	bool hasfile = false;
 
 	log_print("[configure %s]\n", daemon->name);
 
@@ -85,7 +89,6 @@ configure(struct daemon *daemon,
 
 						free(daemon->file);
 						daemon->file = strdup(value);
-						hasfile = true;
 					} else if (strcmp(line, "arguments") == 0) {
 
 						free(daemon->arguments);
@@ -117,7 +120,7 @@ configure(struct daemon *daemon,
 
 	free(line);
 
-	if (hasfile) {
+	if (daemon->file != NULL) {
 		return 0;
 	} else {
 		return -1;
@@ -125,57 +128,73 @@ configure(struct daemon *daemon,
 }
 
 void
-load(const char *directory) {
+configuration(int loadtype) {
+	const char **iterator = configdirs;
+	const char **end = configdirs + sizeof (configdirs) / sizeof (char *);
 	char pathbuf[MAXPATHLEN];
-	char *pathend = stpncpy(pathbuf, directory, sizeof (pathbuf));
-	size_t namemax;
-	DIR *dirp;
-	struct dirent *entry;
 
-	/* Preparing path iteration */
-	if (pathend >= pathbuf + sizeof (pathbuf) - 1) {
-		log_error("[daemons_init] Path buffer overflow\n");
-		exit(EXIT_FAILURE);
-	}
-	*pathend = '/';
-	pathend += 1;
-	namemax = pathbuf + sizeof (pathbuf) - 1 - pathend;
+	for (; iterator != end; ++iterator) {
+		char *pathend = stpncpy(pathbuf, *iterator, sizeof (pathbuf));
+		size_t namemax;
+		DIR *dirp;
+		struct dirent *entry;
 
-	/* Open load directory */
-	dirp = opendir(pathbuf);
-	if (dirp == NULL) {
-		log_print("[daemons_init] Unable to open directory \"%s\"\n", pathbuf);
-		exit(EXIT_FAILURE);
-	}
+		/* Preparing path iteration */
+		if (pathend >= pathbuf + sizeof (pathbuf) - 1) {
+			log_error("[daemons_init] Path buffer overflow\n");
+			continue;
+		}
+		*pathend = '/';
+		pathend += 1;
+		namemax = pathbuf + sizeof (pathbuf) - 1 - pathend;
 
-	/* Iterating load directory */
-	while ((entry = readdir(dirp)) != NULL) {
-		if (entry->d_type == DT_REG
-			|| entry->d_type == DT_LNK) {
-			FILE *filep;
+		/* Open load directory */
+		dirp = opendir(pathbuf);
+		if (dirp == NULL) {
+			log_print("[daemons_init] Unable to open directory \"%s\"\n", pathbuf);
+			continue;
+		}
 
-			strncpy(pathend, entry->d_name, namemax);
+		/* Iterating load directory */
+		while ((entry = readdir(dirp)) != NULL) {
+			if ((entry->d_type == DT_REG
+				|| entry->d_type == DT_LNK)
+				&& entry->d_name[0] != '.') {
+				FILE *filep;
 
-			/* Open the current daemon config file */
-			if ((filep = fopen(pathbuf, "r")) != NULL) {
-				struct daemons_node *node = daemons_node_create(entry->d_name);
+				strncpy(pathend, entry->d_name, namemax);
 
-				if (configure(&node->daemon, filep) == 0) {
-					daemons_insert(&init.daemons, node);
+				/* Open the current daemon config file */
+				if ((filep = fopen(pathbuf, "r")) != NULL) {
+
+					switch (loadtype) {
+					case CONFIG_LOAD: {
+						struct daemons_node *node = daemons_node_create(entry->d_name);
+
+						if (configure(&node->daemon, filep) == 0) {
+							daemons_insert(&init.daemons, node);
+						} else {
+							daemons_node_destroy(node);
+						}
+					} break;
+					case CONFIG_RELOAD: {
+						log_print("Reloading configuration...\n");
+					} break;
+					default:
+						break;
+					}
+
+					fclose(filep);
 				} else {
-					daemons_node_destroy(node);
+					log_error("[cyberd fopen]");
 				}
 
-				fclose(filep);
-			} else {
-				log_error("[cyberd fopen]");
+				/* Closing path */
+				*pathend = '\0';
 			}
-
-			/* Closing path */
-			*pathend = '\0';
 		}
-	}
 
-	closedir(dirp);
+		closedir(dirp);
+	}
 }
 

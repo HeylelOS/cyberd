@@ -1,14 +1,21 @@
 #include "log.h"
-#include "init.h"
 #include "signals.h"
+#include "init.h"
+#include "config.h"
 
 #include <stdlib.h>
 #include <sys/wait.h>
-#include <signal.h>
 
 static void
 sigterm_handler(int sig) {
+
 	init.running = false;
+}
+
+static void
+sighup_handler(int sig) {
+
+	configuration(CONFIG_RELOAD);
 }
 
 static void
@@ -20,9 +27,14 @@ sigchld_handler(int sig) {
 }
 
 void
-init_signals(void) {
+init_signals(sigset_t *set) {
 	struct sigaction action;
 
+	/* Define process' blocked signals */
+	sigfillset(set);
+	sigprocmask(SIG_SETMASK, set, NULL);
+
+	/* Init signal handlers */
 	sigfillset(&action.sa_mask);
 	action.sa_flags = 0;
 
@@ -30,7 +42,16 @@ init_signals(void) {
 	sigaction(SIGTERM, &action, NULL);
 	sigaction(SIGINT, &action, NULL);
 
+	action.sa_handler = sighup_handler;
+	sigaction(SIGHUP, &action, NULL);
+
 	action.sa_handler = sigchld_handler;
 	sigaction(SIGCHLD, &action, NULL);
+
+	/* Define pselect's non blocked signals */
+	sigdelset(set, SIGTERM);
+	sigdelset(set, SIGINT);
+	sigdelset(set, SIGHUP);
+	sigdelset(set, SIGCHLD);
 }
 
