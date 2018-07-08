@@ -9,48 +9,48 @@
 #define HEAP_INDEX_CHILD_RIGHT(index)	(2 * (index) + 2)
 
 static inline void
-scheduler_expand(struct scheduler *schedule) {
+scheduler_expand(struct scheduler *scheduler) {
 
-	schedule->alloc += 64;
-	schedule->scheduling = realloc(schedule->scheduling,
-		sizeof(*schedule->scheduling) * schedule->alloc);
+	scheduler->alloc += 64;
+	scheduler->scheduling = realloc(scheduler->scheduling,
+		sizeof(*scheduler->scheduling) * scheduler->alloc);
 }
 
 static inline bool
-scheduler_prior(struct scheduler *schedule,
+scheduler_prior(struct scheduler *scheduler,
 	size_t index1,
 	size_t index2) {
 
-	return schedule->scheduling[index1].when
-		< schedule->scheduling[index2].when;
+	return scheduler->scheduling[index1].when
+		< scheduler->scheduling[index2].when;
 }
 
 static inline void
-scheduler_swap(struct scheduler *schedule,
+scheduler_swap(struct scheduler *scheduler,
 	size_t index1,
 	size_t index2) {
-	struct scheduler_activity swap = schedule->scheduling[index1];
+	struct scheduler_activity swap = scheduler->scheduling[index1];
 
-	schedule->scheduling[index1] = schedule->scheduling[index2];
-	schedule->scheduling[index2] = swap;
+	scheduler->scheduling[index1] = scheduler->scheduling[index2];
+	scheduler->scheduling[index2] = swap;
 }
 
 static void
-scheduler_siftup(struct scheduler *schedule,
+scheduler_sift_up(struct scheduler *scheduler,
 	size_t index) {
 	size_t parent = HEAP_INDEX_PARENT(index);
 
 	while(index != 0
-		&& scheduler_prior(schedule, index, parent)) {
+		&& scheduler_prior(scheduler, index, parent)) {
 
-		scheduler_swap(schedule, parent, index);
+		scheduler_swap(scheduler, parent, index);
 		index = parent;
 		parent = HEAP_INDEX_PARENT(index);
 	}
 }
 
 static void
-scheduler_siftdown(struct scheduler *schedule,
+scheduler_sift_down(struct scheduler *scheduler,
 	size_t index) {
 	size_t child = HEAP_INDEX_CHILD_LEFT(index);
 
@@ -58,22 +58,22 @@ scheduler_siftdown(struct scheduler *schedule,
 	 * While has a left child,
 	 * while is not a leaf
 	 */
-	while(child < schedule->n) {
+	while(child < scheduler->n) {
 
 		/*
 		 * If has a right child, and is prior to left,
 		 * go to right
 		 */
-		if(child < schedule->n - 1
-			&& scheduler_prior(schedule, child + 1, child)) {
+		if(child < scheduler->n - 1
+			&& scheduler_prior(scheduler, child + 1, child)) {
 
 			child += 1;
 		}
 
 		/* If child has higher priority */
-		if(scheduler_prior(schedule, child, index)) {
+		if(scheduler_prior(scheduler, child, index)) {
 
-			scheduler_swap(schedule, child, index);
+			scheduler_swap(scheduler, child, index);
 			index = child;
 			child = HEAP_INDEX_CHILD_LEFT(index);
 		} else {
@@ -84,39 +84,39 @@ scheduler_siftdown(struct scheduler *schedule,
 }
 
 void
-scheduler_init(struct scheduler *schedule) {
+scheduler_init(struct scheduler *scheduler) {
 
-	schedule->n = 0;
-	schedule->alloc = 0;
-	schedule->scheduling = NULL;
+	scheduler->n = 0;
+	scheduler->alloc = 0;
+	scheduler->scheduling = NULL;
 }
 
 void
-scheduler_destroy(struct scheduler *schedule) {
+scheduler_destroy(struct scheduler *scheduler) {
 
-	free(schedule->scheduling);
+	free(scheduler->scheduling);
 }
 
 void
-scheduler_schedule(struct scheduler *schedule,
+scheduler_schedule(struct scheduler *scheduler,
 	const struct scheduler_activity *activity) {
 
-	if(schedule->n == schedule->alloc) {
-		scheduler_expand(schedule);
+	if(scheduler->n == scheduler->alloc) {
+		scheduler_expand(scheduler);
 	}
 
-	schedule->scheduling[schedule->n] = *activity;
-	schedule->n += 1;
+	scheduler->scheduling[scheduler->n] = *activity;
+	scheduler->n += 1;
 
-	scheduler_siftup(schedule, schedule->n - 1);
+	scheduler_sift_up(scheduler, scheduler->n - 1);
 }
 
 const struct timespec *
-scheduler_next(struct scheduler *schedule) {
+scheduler_next(struct scheduler *scheduler) {
 
-	if(schedule->n != 0) {
+	if(scheduler->n != 0) {
 		static struct timespec timeout;
-		time_t when = schedule->scheduling[0].when;
+		time_t when = scheduler->scheduling[0].when;
 
 		clock_gettime(CLOCK_REALTIME, &timeout);
 
@@ -145,13 +145,18 @@ scheduler_next(struct scheduler *schedule) {
  * dequeue is called
  */
 void
-scheduler_dequeue(struct scheduler *schedule,
+scheduler_dequeue(struct scheduler *scheduler,
 	struct scheduler_activity *activity) {
 
-	*activity = schedule->scheduling[0];
-	schedule->n -= 1;
-	schedule->scheduling[0] = schedule->scheduling[schedule->n];
+	*activity = scheduler->scheduling[0];
+	scheduler->n -= 1;
+	scheduler->scheduling[0] = scheduler->scheduling[scheduler->n];
 
-	scheduler_siftdown(schedule, 0);
+	scheduler_sift_down(scheduler, 0);
 }
 
+void
+scheduler_empty(struct scheduler *scheduler) {
+
+	scheduler->n = 0;
+}

@@ -55,33 +55,32 @@ daemon_start(struct daemon *daemon) {
 		log_print("[daemon %s start]: Already started\n", daemon->name);
 		break;
 	case DAEMON_STOPPED: {
-			pid_t pid;
+		pid_t pid;
 
-			log_print("[daemon %s start]: Starting...\n", daemon->name);
+		log_print("[daemon %s start]: Starting...\n", daemon->name);
 
-			pid = fork();
+		pid = fork();
 
-			if(pid == 0) {
-				extern char **environ;
+		if(pid == 0) {
+			extern char **environ;
 
-				if(daemon->arguments == NULL) {
-					daemon->arguments = alloca(2 * sizeof(char *));
-					daemon->arguments[0] = daemon->name;
-					daemon->arguments[1] = NULL;
-				}
+			if(daemon->arguments == NULL) {
+				daemon->arguments = alloca(2 * sizeof(char *));
+				daemon->arguments[0] = daemon->name;
+				daemon->arguments[1] = NULL;
+			}
 
-				execve(daemon->file, daemon->arguments, environ);
+			execve(daemon->file, daemon->arguments, environ);
 
-				exit(EXIT_FAILURE);
+			exit(EXIT_FAILURE);
+		} else {
+			if(pid > 0) {
+				log_print("    [daemon forked] with pid: %d\n", pid);
 			} else {
-				if(pid > 0) {
-					log_print("    [daemon forked] with pid: %d\n", pid);
-				} else {
-					log_error("    [daemon fork]");
-				}
+				log_error("    [daemon fork]");
 			}
 		}
-		break;
+	} break;
 	case DAEMON_STOPPING:
 		log_print("[daemon %s start]: Is stopping\n", daemon->name);
 		break;

@@ -31,25 +31,28 @@ struct scheduler {
 };
 
 void
-scheduler_init(struct scheduler *schedule);
+scheduler_init(struct scheduler *scheduler);
 
 void
-scheduler_destroy(struct scheduler *schedule);
+scheduler_destroy(struct scheduler *scheduler);
 
 void
-scheduler_schedule(struct scheduler *schedule,
+scheduler_schedule(struct scheduler *scheduler,
 	const struct scheduler_activity *activity);
 
 const struct timespec *
-scheduler_next(struct scheduler *schedule);
+scheduler_next(struct scheduler *scheduler);
 
 /*
  * The scheduler MUST NOT be empty when
  * dequeue is called
  */
 void
-scheduler_dequeue(struct scheduler *schedule,
+scheduler_dequeue(struct scheduler *scheduler,
 	struct scheduler_activity *activity);
+
+void
+scheduler_empty(struct scheduler *scheduler);
 
 /* SCHEDULER_H */
 #endif
