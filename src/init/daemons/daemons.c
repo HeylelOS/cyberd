@@ -65,7 +65,6 @@ daemons_node_insert(struct daemons_node *root,
 
 		if(node->daemon.hash < root->daemon.hash) {
 
-			log_print("%.8X < %.8X\n", node->daemon.hash, root->daemon.hash);
 			root->left = daemons_node_insert(root->left, node);
 
 			if(daemons_node_balance(root) == -2) {
@@ -79,7 +78,6 @@ daemons_node_insert(struct daemons_node *root,
 
 		} else if(node->daemon.hash > root->daemon.hash) {
 
-			log_print("%.8X > %.8X\n", node->daemon.hash, root->daemon.hash);
 			root->right = daemons_node_insert(root->right, node);
 
 			if(daemons_node_balance(root) == 2) {
