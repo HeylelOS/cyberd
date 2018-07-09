@@ -12,6 +12,7 @@ static struct daemons_node *
 daemons_node_rotate_left_left(struct daemons_node *node) {
 	struct daemons_node *node2 = node->left;
 
+	log_print("Rotate left left\n");
 	node->left = node2->right;
 	node2->right = node;
 
@@ -25,11 +26,12 @@ static struct daemons_node *
 daemons_node_rotate_right_right(struct daemons_node *node) {
 	struct daemons_node *node2 = node->right;
 
+	log_print("Rotate right right\n");
 	node->right = node2->left;
 	node2->left = node;
 
 	node->height = max(daemons_node_height(node->left), daemons_node_height(node->right)) + 1;
-	node2->height = max(daemons_node_height(node2->left), node->height) + 1;
+	node2->height = max(daemons_node_height(node2->right), node->height) + 1;
 
 	return node2;
 }
@@ -37,6 +39,7 @@ daemons_node_rotate_right_right(struct daemons_node *node) {
 static struct daemons_node *
 daemons_node_rotate_left_right(struct daemons_node *node) {
 
+	log_print("Rotate left right\n");
 	node->left = daemons_node_rotate_right_right(node->left);
 
 	return daemons_node_rotate_left_left(node);
@@ -45,6 +48,7 @@ daemons_node_rotate_left_right(struct daemons_node *node) {
 static struct daemons_node *
 daemons_node_rotate_right_left(struct daemons_node *node) {
 
+	log_print("Rotate right left\n");
 	node->right = daemons_node_rotate_left_left(node->right);
 
 	return daemons_node_rotate_right_right(node);
@@ -59,9 +63,10 @@ daemons_node_insert(struct daemons_node *root,
 		return node;
 	} else {
 
-		if (root->daemon.hash < node->daemon.hash) {
+		if (node->daemon.hash < root->daemon.hash) {
 
 			root->left = daemons_node_insert(root->left, node);
+
 			if (daemons_node_balance(root) == -2) {
 
 				if (node->daemon.hash < root->left->daemon.hash) {
@@ -71,13 +76,13 @@ daemons_node_insert(struct daemons_node *root,
 				}
 			}
 
-		} else if (root->daemon.hash > node->daemon.hash) {
+		} else if (node->daemon.hash > root->daemon.hash) {
 
 			root->right = daemons_node_insert(root->right, node);
 
 			if (daemons_node_balance(root) == 2) {
 
-				if (node->daemon.hash > root->left->daemon.hash) {
+				if (node->daemon.hash > root->right->daemon.hash) {
 					root = daemons_node_rotate_right_right(root);
 				} else {
 					root = daemons_node_rotate_right_left(root);
@@ -101,7 +106,7 @@ daemons_node_create(const char *name) {
 
 	node->left = NULL;
 	node->right = NULL;
-	node->height = 0;
+	node->height = 1;
 
 	return node;
 }
@@ -110,9 +115,6 @@ void
 daemons_node_destroy(struct daemons_node *node) {
 
 	if (node != NULL) {
-
-		log_print("Destroying daemon \"%s\" %.8X\n",
-			node->daemon.name, node->daemon.hash);
 
 		daemon_destroy(&node->daemon);
 
