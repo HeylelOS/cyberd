@@ -176,8 +176,6 @@ configuration(int loadtype) {
 						} else {
 							daemons_node_destroy(node);
 						}
-
-						daemons_print(&init.daemons);
 					} break;
 					case CONFIG_RELOAD: {
 						log_print("Reloading configuration for \"%s\"...\n", entry->d_name);

@@ -162,20 +162,3 @@ daemons_find(struct daemons *daemons,
 	return current == NULL ? NULL : &current->daemon;
 }
 
-static void
-daemons_node_print(struct daemons_node *node, int spaces, const char *pre) {
-	if(node != NULL) {
-		for(int i = 0; i < spaces; ++i) {
-			log_print("   ");
-		}
-		log_print("%.8X (%s %d)-> %s\n", node->daemon.hash, pre, node->height, node->daemon.name);
-
-		daemons_node_print(node->left, spaces + 1, "left");
-		daemons_node_print(node->right, spaces + 1, "right");
-	}
-}
-
-void
-daemons_print(struct daemons *daemons) {
-	daemons_node_print(daemons->root, 0, "");
-}
