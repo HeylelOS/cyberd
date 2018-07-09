@@ -40,5 +40,8 @@ struct daemon *
 daemons_find(struct daemons *daemons,
 	hash_t hash);
 
+void
+daemons_print(struct daemons *daemons);
+
 /* DAEMONS_H */
 #endif

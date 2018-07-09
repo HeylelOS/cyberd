@@ -49,7 +49,7 @@ main(int argc,
 				log_print("Unknown scheduled action received\n");
 				break;
 			}
-		} else {
+		} else if(errno != EINTR) {
 			log_error("[cyberd pselect]");
 		}
 	}
