@@ -1,0 +1,4 @@
+file=/bin/pwd
+
+@startup
+launch

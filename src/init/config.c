@@ -57,7 +57,7 @@ configure(struct daemon *daemon,
 	char *line = NULL;
 	size_t linecap = 0;
 
-	log_print("[configure %s]\n", daemon->name);
+	log_print("[configure %s %.8X]\n", daemon->name, daemon->hash);
 
 	/* Reading current line */
 	while ((length = getline(&line, &linecap, filep)) != -1) {
@@ -178,7 +178,7 @@ configuration(int loadtype) {
 						}
 					} break;
 					case CONFIG_RELOAD: {
-						log_print("Reloading configuration...\n");
+						log_print("Reloading configuration for \"%s\"...\n", entry->d_name);
 					} break;
 					default:
 						break;
