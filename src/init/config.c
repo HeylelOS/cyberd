@@ -22,17 +22,18 @@ expand_arguments(const char *args) {
 		if(p.we_wordc >= 1) {
 			size_t total = 0;
 			int i;
+			char *str;
 
 			for(i = 0; i < p.we_wordc; ++i) {
 				total += strlen(p.we_wordv[i]) + 1;
 			}
 
 			arguments = malloc((p.we_wordc + 1) * sizeof(char *) + total);
-			char *ptr = (char *)(arguments + p.we_wordc + 1);
+			str = (char *)(arguments + p.we_wordc + 1);
 
 			for(i = 0; i < p.we_wordc; ++i) {
-				arguments[i] = ptr;
-				ptr = stpcpy(ptr, p.we_wordv[i]) + 1;
+				arguments[i] = str;
+				str = stpcpy(str, p.we_wordv[i]) + 1;
 			}
 			arguments[i] = NULL;
 		} else {
@@ -57,9 +58,9 @@ configure(struct daemon *daemon,
 	char *line = NULL;
 	size_t linecap = 0;
 
-	log_print("[configure %s %.8X]\n", daemon->name, daemon->hash);
+	log_print("[configure %s]\n", daemon->name);
 
-	/* Reading current line */
+	/* Reading lines */
 	while((length = getline(&line, &linecap, filep)) != -1) {
 		line[length - 1] = '\0';
 
@@ -102,7 +103,7 @@ configure(struct daemon *daemon,
 					if(strcmp(line, "launch") == 0) {
 						struct scheduler_activity launch = {
 							.daemon = daemon,
-							.when = SCHEDULING_NOW,
+							.when = SCHEDULING_ASAP,
 							.action = SCHEDULE_START
 						};
 

@@ -2,8 +2,9 @@ CC=clang
 CFLAGS=-O3 -pedantic -Wall -fPIC
 BUILDDIRS=build/ build/bin/ build/lib/
 
-INIT_DAEMONS=$(wildcard src/init/daemons/*.c)
 INIT_SCHEDULER=$(wildcard src/init/scheduler/*.c)
+INIT_NETWORKER=$(wildcard src/init/networker/*.c)
+INIT_DAEMONS=$(wildcard src/init/daemons/*.c)
 INIT_CORE=$(wildcard src/init/*.c)
 INIT_BIN=build/bin/cyberd
 
@@ -23,7 +24,7 @@ clean:
 $(BUILDDIRS):
 	mkdir $@
 
-$(INIT_BIN): $(INIT_CORE) $(INIT_SCHEDULER) $(INIT_DAEMONS)
+$(INIT_BIN): $(INIT_CORE) $(INIT_SCHEDULER) $(INIT_NETWORKER) $(INIT_DAEMONS)
 	$(CC) $(CFLAGS) -o $@ $^
 
 $(LIB_BIN): $(LIB_CORE)
