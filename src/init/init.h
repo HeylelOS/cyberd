@@ -1,13 +1,15 @@
 #ifndef INIT_H
 #define INIT_H
 
-#include "daemons/daemons.h"
 #include "scheduler/scheduler.h"
+#include "networker/networker.h"
+#include "daemons/daemons.h"
 
 #include <stdbool.h>
 
 extern struct init {
 	struct scheduler scheduler;
+	struct networker networker;
 	struct daemons daemons;
 
 	bool running;

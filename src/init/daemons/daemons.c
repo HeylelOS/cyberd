@@ -12,7 +12,6 @@ static struct daemons_node *
 daemons_node_rotate_left_left(struct daemons_node *node) {
 	struct daemons_node *node2 = node->left;
 
-	log_print("Rotate left left\n");
 	node->left = node2->right;
 	node2->right = node;
 
@@ -26,7 +25,6 @@ static struct daemons_node *
 daemons_node_rotate_right_right(struct daemons_node *node) {
 	struct daemons_node *node2 = node->right;
 
-	log_print("Rotate right right\n");
 	node->right = node2->left;
 	node2->left = node;
 
@@ -39,7 +37,6 @@ daemons_node_rotate_right_right(struct daemons_node *node) {
 static struct daemons_node *
 daemons_node_rotate_left_right(struct daemons_node *node) {
 
-	log_print("Rotate left right\n");
 	node->left = daemons_node_rotate_right_right(node->left);
 
 	return daemons_node_rotate_left_left(node);
@@ -48,7 +45,6 @@ daemons_node_rotate_left_right(struct daemons_node *node) {
 static struct daemons_node *
 daemons_node_rotate_right_left(struct daemons_node *node) {
 
-	log_print("Rotate right left\n");
 	node->right = daemons_node_rotate_left_left(node->right);
 
 	return daemons_node_rotate_right_right(node);
