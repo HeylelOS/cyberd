@@ -21,7 +21,7 @@ enum scheduler_action {
 struct scheduler_activity {
 	struct daemon *daemon;
 	time_t when;
-#define SCHEDULING_NOW	0
+#define SCHEDULING_ASAP	0
 	enum scheduler_action action;
 };
 
