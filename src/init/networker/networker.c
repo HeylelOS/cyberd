@@ -1,6 +1,8 @@
 #include "../log.h"
 #include "networker.h"
 
+#include <stdlib.h>
+
 #ifdef __APPLE__
 /* FD_COPY uses bcopy in Darwin */
 #include <strings.h>
