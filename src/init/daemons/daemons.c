@@ -5,11 +5,12 @@
 #include <string.h>
 
 #define daemons_node_height(node)  ((node) == NULL ? 0 : (node)->height)
-#define daemons_node_balance(node) (daemons_node_height((node)->right) - daemons_node_height((node)->left))
+#define daemons_node_balance(node) ((node) == NULL ? 0 : \
+	(daemons_node_height((node)->right) - daemons_node_height((node)->left)))
 #define max(a, b) ((a) > (b) ? (a) : (b))
 
 static struct daemons_node *
-daemons_node_rotate_left_left(struct daemons_node *node) {
+daemons_node_rotate_right(struct daemons_node *node) {
 	struct daemons_node *node2 = node->left;
 
 	node->left = node2->right;
@@ -22,7 +23,7 @@ daemons_node_rotate_left_left(struct daemons_node *node) {
 }
 
 static struct daemons_node *
-daemons_node_rotate_right_right(struct daemons_node *node) {
+daemons_node_rotate_left(struct daemons_node *node) {
 	struct daemons_node *node2 = node->right;
 
 	node->right = node2->left;
@@ -37,17 +38,17 @@ daemons_node_rotate_right_right(struct daemons_node *node) {
 static struct daemons_node *
 daemons_node_rotate_left_right(struct daemons_node *node) {
 
-	node->left = daemons_node_rotate_right_right(node->left);
+	node->left = daemons_node_rotate_left(node->left);
 
-	return daemons_node_rotate_left_left(node);
+	return daemons_node_rotate_right(node);
 }
 
 static struct daemons_node *
 daemons_node_rotate_right_left(struct daemons_node *node) {
 
-	node->right = daemons_node_rotate_left_left(node->right);
+	node->right = daemons_node_rotate_right(node->right);
 
-	return daemons_node_rotate_right_right(node);
+	return daemons_node_rotate_left(node);
 }
 
 static struct daemons_node *
@@ -66,7 +67,7 @@ daemons_node_insert(struct daemons_node *root,
 			if (daemons_node_balance(root) == -2) {
 
 				if (node->daemon.hash < root->left->daemon.hash) {
-					root = daemons_node_rotate_left_left(root);
+					root = daemons_node_rotate_right(root);
 				} else {
 					root = daemons_node_rotate_left_right(root);
 				}
@@ -79,7 +80,7 @@ daemons_node_insert(struct daemons_node *root,
 			if (daemons_node_balance(root) == 2) {
 
 				if (node->daemon.hash > root->right->daemon.hash) {
-					root = daemons_node_rotate_right_right(root);
+					root = daemons_node_rotate_left(root);
 				} else {
 					root = daemons_node_rotate_right_left(root);
 				}
@@ -92,6 +93,67 @@ daemons_node_insert(struct daemons_node *root,
 
 		return root;
 	}
+}
+
+/*
+ * Returns the root of the tree
+ * and the removed node in removed,
+ * left unchanged if the node dosn't exist
+ */
+static struct daemons_node *
+daemons_node_remove(struct daemons_node *root,
+	hash_t hash,
+	struct daemons_node **removed) {
+
+	if (root != NULL) {
+		if (hash < root->daemon.hash) {
+			root->left = daemons_node_remove(root->left, hash, removed);
+		} else if (hash > root->daemon.hash) {
+			root->right = daemons_node_remove(root->right, hash, removed);
+		} else {
+			*removed = root;
+
+			if (root->left != NULL
+				&& root->right != NULL) {
+				struct daemons_node *successor = root->right;
+
+				while (successor->left != NULL) {
+					successor = successor->left;
+				}
+
+				root->right = daemons_node_remove(root->right,
+					successor->daemon.hash, &successor);
+
+				successor->left = root->left;
+				successor->right = root->right;
+				root = successor;
+			} else if (root->left == NULL) {
+				root = root->right;
+			} else {
+				root = root->left;
+			}
+		}
+	}
+
+	if (root != NULL) {
+		root->height = max(daemons_node_height(root->left), daemons_node_height(root->right)) + 1;
+
+		if (daemons_node_balance(root) > 1) {
+			if (daemons_node_balance(root->right) >= 0) {
+				root = daemons_node_rotate_left(root);
+			} else {
+				root = daemons_node_rotate_right_left(root);
+			}
+		} else if (daemons_node_balance(root) < -1) {
+			if (daemons_node_balance(root->left) <= 0) {
+				root = daemons_node_rotate_right(root);
+			} else {
+				root = daemons_node_rotate_left_right(root);
+			}
+		}
+	}
+
+	return root;
 }
 
 struct daemons_node *
@@ -138,6 +200,16 @@ daemons_insert(struct daemons *daemons,
 	struct daemons_node *node) {
 
 	daemons->root = daemons_node_insert(daemons->root, node);
+}
+
+struct daemons_node *
+daemons_remove(struct daemons *daemons,
+	hash_t hash) {
+	struct daemons_node *removed = NULL;
+
+	daemons->root = daemons_node_remove(daemons->root, hash, &removed);
+
+	return removed;
 }
 
 struct daemon *
