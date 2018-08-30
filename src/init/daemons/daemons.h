@@ -36,7 +36,7 @@ void
 daemons_insert(struct daemons *daemons,
 	struct daemons_node *node);
 
-struct daemon *
+struct daemons_node *
 daemons_remove(struct daemons *daemons,
 	hash_t hash);
 

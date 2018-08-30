@@ -5,7 +5,8 @@
 #include <string.h>
 
 #define daemons_node_height(node)  ((node) == NULL ? 0 : (node)->height)
-#define daemons_node_balance(node) (daemons_node_height((node)->right) - daemons_node_height((node)->left))
+#define daemons_node_balance(node) ((node) == NULL ? 0 : \
+	(daemons_node_height((node)->right) - daemons_node_height((node)->left)))
 #define max(a, b) ((a) > (b) ? (a) : (b))
 
 static struct daemons_node *
@@ -120,7 +121,12 @@ daemons_node_remove(struct daemons_node *root,
 					successor = successor->left;
 				}
 
-				/* ??? */
+				root->right = daemons_node_remove(root->right,
+					successor->daemon.hash, &successor);
+
+				successor->left = root->left;
+				successor->right = root->right;
+				root = successor;
 			} else if(root->left == NULL) {
 				root = root->right;
 			} else {
@@ -132,17 +138,17 @@ daemons_node_remove(struct daemons_node *root,
 	if(root != NULL) {
 		root->height = max(daemons_node_height(root->left), daemons_node_height(root->right)) + 1;
 
-		if(daemons_node_balance(root) == 2) {
-			if(daemons_node_balance(root->left) >= 0) {
-				root = daemons_node_rotate_right(root);
-			} else {
-				root = daemons_node_rotate_left_right(root);
-			}
-		} else if(daemons_node_balance(root) == -2) {
-			if(daemons_node_balance(root->right) <= 0) {
+		if(daemons_node_balance(root) > 1) {
+			if(daemons_node_balance(root->right) >= 0) {
 				root = daemons_node_rotate_left(root);
 			} else {
 				root = daemons_node_rotate_right_left(root);
+			}
+		} else if(daemons_node_balance(root) < -1) {
+			if(daemons_node_balance(root->left) <= 0) {
+				root = daemons_node_rotate_right(root);
+			} else {
+				root = daemons_node_rotate_left_right(root);
 			}
 		}
 	}
@@ -196,7 +202,7 @@ daemons_insert(struct daemons *daemons,
 	daemons->root = daemons_node_insert(daemons->root, node);
 }
 
-struct daemon *
+struct daemons_node *
 daemons_remove(struct daemons *daemons,
 	hash_t hash) {
 	struct daemons_node *removed = NULL;
