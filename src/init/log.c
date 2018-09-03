@@ -7,20 +7,15 @@
 
 static FILE *out;
 
-/* lazy initialization of logs */
-static void
-log_lazy(void) {
-
-	if (out == NULL) {
-		out = stdout;
-	}
+void
+init_log(void) {
+	out = stdout;
 }
 
 void
 log_print(const char *format,
 	...) {
 	va_list ap;
-	log_lazy();
 
 	va_start(ap, format);
 	vfprintf(out, format, ap);
@@ -29,7 +24,6 @@ log_print(const char *format,
 
 void
 log_error(const char *message) {
-	log_lazy();
 
 	fprintf(out, "%s: %s\n", message, strerror(errno));
 }

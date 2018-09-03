@@ -1,13 +1,19 @@
 #include "log.h"
-#include "init.h"
-#include "config.h"
 #include "signals.h"
+#include "configuration.h"
+#include "scheduler/scheduler.h"
+#include "networker/networker.h"
+#include "daemons/daemons.h"
 
-#include <sys/select.h>
-#include <errno.h>
 #include <stdlib.h>
+#include <stdbool.h>
+#include <errno.h>
+#include <sys/select.h>
 
-struct init init;
+struct scheduler scheduler;
+struct networker networker;
+struct daemons daemons;
+bool running;
 
 int
 main(int argc,
@@ -15,28 +21,29 @@ main(int argc,
 	sigset_t set; /* Authorized signals while in pselect */
 
 	/* Process environnement */
+	init_log();
 	init_signals(&set);
 
 	/* Process configuration */
-	scheduler_init(&init.scheduler);
-	networker_init(&init.networker);
-	daemons_init(&init.daemons);
-	init.running = true;
+	scheduler_init(&scheduler);
+	networker_init(&networker);
+	daemons_init(&daemons);
+	running = true;
 	configuration(CONFIG_LOAD);
 
 	log_print("Entering main loop...\n");
-	while (init.running) {
+	while (running) {
 		int fds;
 		fd_set *readfdsp, *writefdsp;
 		const struct timespec *timeoutp;
 
 		/* Fetch networker indications */
-		fds = networker_lastfd(&init.networker) + 1;
-		readfdsp = networker_readset(&init.networker);
-		writefdsp = networker_writeset(&init.networker);
+		fds = networker_lastfd(&networker) + 1;
+		readfdsp = networker_readset(&networker);
+		writefdsp = networker_writeset(&networker);
 
 		/* Fetch time before next action */
-		timeoutp = scheduler_next(&init.scheduler);
+		timeoutp = scheduler_next(&scheduler);
 
 		/* Wait for action */
 		fds = pselect(fds,
@@ -47,13 +54,13 @@ main(int argc,
 		if (fds > 0) {
 			/* Network I/O */
 
-			fds = networker_reading(&init.networker, fds);
-			fds = networker_writing(&init.networker, fds);
+			fds = networker_reading(&networker, fds);
+			fds = networker_writing(&networker, fds);
 		} else if (fds == 0) {
 			/* An event timed out */
 			struct scheduler_activity activity;
 
-			scheduler_dequeue(&init.scheduler, &activity);
+			scheduler_dequeue(&scheduler, &activity);
 
 			switch (activity.action) {
 			case SCHEDULE_START:
@@ -75,9 +82,9 @@ main(int argc,
 		}
 	}
 
-	daemons_destroy(&init.daemons);
-	networker_destroy(&init.networker);
-	scheduler_destroy(&init.scheduler);
+	daemons_destroy(&daemons);
+	networker_destroy(&networker);
+	scheduler_destroy(&scheduler);
 
 	log_print("Finished...\n");
 
