@@ -1,6 +1,7 @@
 #include "log.h"
-#include "config.h"
-#include "init.h"
+#include "configuration.h"
+#include "daemons/daemons.h"
+#include "scheduler/scheduler.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -101,13 +102,14 @@ configure(struct daemon *daemon,
 				if (value == NULL) {
 
 					if (strcmp(line, "launch") == 0) {
+						extern struct scheduler scheduler;
 						struct scheduler_activity launch = {
 							.daemon = daemon,
 							.when = SCHEDULING_ASAP,
 							.action = SCHEDULE_START
 						};
 
-						scheduler_schedule(&init.scheduler, &launch);
+						scheduler_schedule(&scheduler, &launch);
 					}
 				} else {
 					/* log_print("Start: \"%s\"=\"%s\"\n", line, sep); */
@@ -173,7 +175,8 @@ configuration(int loadtype) {
 						struct daemons_node *node = daemons_node_create(entry->d_name);
 
 						if (configure(&node->daemon, filep) == 0) {
-							daemons_insert(&init.daemons, node);
+							extern struct daemons daemons;
+							daemons_insert(&daemons, node);
 						} else {
 							daemons_node_destroy(node);
 						}

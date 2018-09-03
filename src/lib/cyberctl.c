@@ -1,21 +1,17 @@
 #include "cyberctl.h"
 
-cyberctl_t
-cyberctl_open(const char *path) {
+#include <stdio.h>
 
-	return -1;
+struct cyberctl {
+	int fd;
+};
+
+cyberctl_t *
+cyberctl_create(void) {
+	return NULL;
 }
 
 void
-cyberctl_close(cyberctl_t ctl) {
+cyberctl_destroy(cyberctl_t *control) {
 }
-
-int
-cyberctl_status(cyberctl_t ctl,
-	struct cyberctl_status *statuses,
-	unsigned int *count) {
-
-	return -1;
-}
-
 

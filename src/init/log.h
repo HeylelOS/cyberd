@@ -2,6 +2,9 @@
 #define LOG_H
 
 void
+init_log(void);
+
+void
 log_print(const char *format,
 	...);
 

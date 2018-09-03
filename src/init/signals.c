@@ -1,15 +1,16 @@
 #include "log.h"
 #include "signals.h"
-#include "init.h"
-#include "config.h"
+#include "configuration.h"
 
 #include <stdlib.h>
 #include <sys/wait.h>
+#include <stdbool.h>
 
 static void
 sigterm_handler(int sig) {
+	extern bool running;
 
-	init.running = false;
+	running = false;
 }
 
 static void
