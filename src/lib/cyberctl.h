@@ -1,25 +1,29 @@
 #ifndef CYBERCTL_H
 #define CYBERCTL_H
 
-#include <sys/types.h>
+typedef struct cyberctl cyberctl_t;
 
-typedef int cyberctl_t;
+enum cyberctl_status {
+	RUNNING,
+	STOPPED,
+	STOPPING
+};
 
-cyberctl_t
-cyberctl_open(const char *path);
-
-void
-cyberctl_close(cyberctl_t ctl);
-
-struct cyberctl_status {
-	pid_t pid;
+struct cyberctl_state {
+	enum cyberctl_status status;
 	const char name[];
 };
 
+cyberctl_t *
+cyberctl_create(void);
+
 int
-cyberctl_status(cyberctl_t ctl,
-	struct cyberctl_status *statuses,
-	unsigned int *count);
+cyberctl_list(cyberctl_t *ctl,
+	struct cyberctl_state *statuses,
+	unsigned long *count);
+
+void
+cyberctl_destroy(cyberctl_t *ctl);
 
 /* CYBERCTL_H */
 #endif
