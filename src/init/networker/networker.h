@@ -7,7 +7,8 @@
 struct networker {
 	fd_set activefds;
 
-	int lastfd;
+	struct networker_node *first;
+	struct networker_node *last;
 };
 
 void
