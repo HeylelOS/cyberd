@@ -1,17 +1,11 @@
 #include "cyberctl.h"
 
-#include <stdio.h>
-
-struct cyberctl {
-	int fd;
-};
-
-cyberctl_t *
-cyberctl_create(void) {
-	return NULL;
+int
+cyberctl_connect(const char *path) {
+	return -1;
 }
 
 void
-cyberctl_destroy(cyberctl_t *control) {
+cyberctl_disconnect(int fd) {
 }
 
