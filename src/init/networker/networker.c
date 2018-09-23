@@ -9,6 +9,17 @@ struct networker_node {
 	struct networker_node *next;
 };
 
+static struct networker_node *
+networker_node_create(int fd) {
+	struct networker_node *node = malloc(sizeof(*node));
+
+	node->fd = fd;
+	node->previous = NULL;
+	node->next = NULL;
+
+	return node;
+}
+
 static void
 networker_insert(struct networker *networker,
 	struct networker_node *node) {
@@ -20,10 +31,12 @@ networker_insert(struct networker *networker,
 			if(networker->last->fd < node->fd) {
 
 				node->previous = networker->last;
+				networker->last->next = node;
 				networker->last = node;
 			} else if(node->fd < networker->first->fd) {
 
 				node->next = networker->first;
+				networker->first->previous = node;
 				networker->first = node;
 			} else {
 				struct networker_node *current = networker->first->next;
@@ -41,6 +54,35 @@ networker_insert(struct networker *networker,
 			networker->last = node;
 		}
 	}
+}
+
+static struct networker_node *
+networker_remove(struct networker *networker,
+	int fd) {
+	struct networker_node *current = NULL;
+
+	if(FD_ISSET(fd, &networker->activefds)) {
+		current = networker->first;
+
+		while(current->fd != fd) {
+			current = current->next;
+		}
+
+		if(current->previous != NULL) {
+			current->previous->next = current->next;
+		}
+
+		if(current->next != NULL) {
+			current->next->previous = current->previous;
+		}
+
+		current->previous = NULL;
+		current->next = NULL;
+
+		FD_CLR(fd, &networker->activefds);
+	}
+
+	return current;
 }
 
 void
