@@ -10,9 +10,25 @@
 #include <errno.h>
 #include <sys/select.h>
 
+/**
+ * The scheduler is a structure meant to planify actions cyberd must do,
+ * now or in the future.
+ */
 struct scheduler scheduler;
+/**
+ * The networker is a structure meant to handle IPCs and file descriptor
+ * related events handling.
+ */
 struct networker networker;
+/**
+ * The daemons is a storage structure, it stores the lone allocation of
+ * each daemon representation, only pointers are then manipulated elsewhere.
+ * It provides function to index easily and access quickly those.
+ */
 struct daemons daemons;
+/**
+ * The running boolean determines when the main loop shall end.
+ */
 bool running;
 
 int

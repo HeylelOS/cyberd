@@ -76,6 +76,7 @@ daemon_start(struct daemon *daemon) {
 		} else {
 			if (pid > 0) {
 				log_print("    [daemon forked] with pid: %d\n", pid);
+				/* spawns_record(daemon, pid); */
 			} else {
 				log_error("    [daemon fork]");
 			}
@@ -96,6 +97,10 @@ daemon_stop(struct daemon *daemon) {
 	switch (daemon->state) {
 	case DAEMON_RUNNING:
 		log_print("[daemon %s stop]: Stopping...\n", daemon->name);
+		/*
+			kill(daemon->pid, daemon->sigend);
+			daemon->state = DAEMON_STOPPING;
+		*/
 		break;
 	case DAEMON_STOPPED:
 		log_print("[daemon %s stop]: Already stopped\n", daemon->name);
@@ -115,6 +120,9 @@ daemon_reload(struct daemon *daemon) {
 	switch (daemon->state) {
 	case DAEMON_RUNNING:
 		log_print("[daemon %s reload]: Reloading...\n", daemon->name);
+		/*
+			kill(daemon->pid, daemon->sigreload);
+		*/
 		break;
 	case DAEMON_STOPPED:
 		log_print("[daemon %s reload]: Is stopped\n", daemon->name);
@@ -134,12 +142,18 @@ daemon_end(struct daemon *daemon) {
 	switch (daemon->state) {
 	case DAEMON_RUNNING:
 		log_print("[daemon %s end]: Was running, ending...\n", daemon->name);
+		/*
+			kill(daemon->pid, 9);
+		*/
 		break;
 	case DAEMON_STOPPED:
 		log_print("[daemon %s end]: Is stopped\n", daemon->name);
 		break;
 	case DAEMON_STOPPING:
 		log_print("[daemon %s end]: Ending...\n", daemon->name);
+		/*
+			kill(daemon->pid, 9);
+		*/
 		break;
 	default:
 		log_print("[daemon %s end]: Inconsistent state\n", daemon->name);

@@ -24,6 +24,8 @@ sigchld_handler(int sig) {
 	int status;
 	pid_t child = waitpid(-1, &status, WNOHANG);
 
+	/* struct daemon *daemon = spawns_retrieve(child); */
+
 	log_print("Child %d terminated\n", child);
 }
 
