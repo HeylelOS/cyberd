@@ -4,6 +4,13 @@
 #include "../daemon.h"
 #include <sys/types.h>
 
+/**
+ * spawns.h holds the structure which records every
+ * spawn of every daemons. For now, it's a forward linked list,
+ * which doesn't stop one daemon from having multiple spawns.
+ * but we ensure it never happens.
+ */
+
 struct spawns {
 	struct spawn *first;
 };

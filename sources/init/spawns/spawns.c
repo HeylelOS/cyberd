@@ -57,17 +57,21 @@ spawns_record(struct spawns *spawns,
 struct daemon *
 spawns_retrieve(struct spawns *spawns,
 	pid_t pid) {
-	struct spawn *current = spawns->first;
+	struct spawn **current = &spawns->first;
 	struct daemon *daemon = NULL;
 
-	while(current != NULL
-		&& current->pid != pid) {
+	while(*current != NULL
+		&& (*current)->pid != pid) {
 
-		current = current->next;
+		current = &(*current)->next;
 	}
 
-	if(current != NULL) {
-		daemon = current->daemon;
+	if(*current != NULL) {
+		struct spawn *spawn = *current;
+
+		daemon = spawn->daemon;
+		*current = spawn->next;
+		spawn_destroy(spawn);
 	}
 
 	return daemon;

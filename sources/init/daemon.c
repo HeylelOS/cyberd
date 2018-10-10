@@ -1,5 +1,6 @@
 #include "log.h"
 #include "daemon.h"
+#include "spawns/spawns.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -75,8 +76,10 @@ daemon_start(struct daemon *daemon) {
 			exit(EXIT_FAILURE);
 		} else {
 			if(pid > 0) {
+				extern struct spawns spawns;
+
+				spawns_record(&spawns, daemon, pid);
 				log_print("    [daemon forked] with pid: %d\n", pid);
-				/* spawns_record(daemon, pid); */
 			} else {
 				log_error("    [daemon fork]");
 			}
