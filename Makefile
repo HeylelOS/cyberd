@@ -5,6 +5,7 @@ BUILDDIRS=build/ build/bin/ build/lib/
 INIT_SCHEDULER=$(wildcard sources/init/scheduler/*.c)
 INIT_NETWORKER=$(wildcard sources/init/networker/*.c)
 INIT_DAEMONS=$(wildcard sources/init/daemons/*.c)
+INIT_SPAWNS=$(wildcard sources/init/spawns/*.c)
 INIT_CORE=$(wildcard sources/init/*.c)
 INIT_BIN=build/bin/cyberd
 
@@ -24,7 +25,7 @@ clean:
 $(BUILDDIRS):
 	mkdir $@
 
-$(INIT_BIN): $(INIT_CORE) $(INIT_SCHEDULER) $(INIT_NETWORKER) $(INIT_DAEMONS)
+$(INIT_BIN): $(INIT_CORE) $(INIT_SCHEDULER) $(INIT_NETWORKER) $(INIT_DAEMONS) $(INIT_SPAWNS)
 	$(CC) $(CFLAGS) -o $@ $^
 
 $(LIB_BIN): $(LIB_CORE)
