@@ -1,6 +1,7 @@
 #include "log.h"
 #include "signals.h"
 #include "configuration.h"
+#include "spawns/spawns.h"
 
 #include <stdlib.h>
 #include <sys/wait.h>
@@ -21,12 +22,17 @@ sighup_handler(int sig) {
 
 static void
 sigchld_handler(int sig) {
+	extern struct spawns spawns;
 	int status;
 	pid_t child = waitpid(-1, &status, WNOHANG);
+	struct daemon *daemon = spawns_retrieve(&spawns, child);
 
-	/* struct daemon *daemon = spawns_retrieve(child); */
-
-	log_print("Child %d terminated\n", child);
+	if (daemon != NULL) {
+		log_print("Daemon %s (pid: %d) terminated with status: %d\n",
+			daemon->name, child, status);
+	} else {
+		log_print("Orphan process %d terminated\n", child);
+	}
 }
 
 void

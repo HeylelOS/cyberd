@@ -3,6 +3,7 @@
 #include "configuration.h"
 #include "scheduler/scheduler.h"
 #include "networker/networker.h"
+#include "spawns/spawns.h"
 #include "daemons/daemons.h"
 
 #include <stdlib.h>
@@ -20,6 +21,12 @@ struct scheduler scheduler;
  * related events handling.
  */
 struct networker networker;
+/**
+ * The spawns structure holds every daemon instance running,
+ * technically, it's only used in daemon.c and signals.c when
+ * forks and a sigchlds happen.
+ */
+struct spawns spawns;
 /**
  * The daemons is a storage structure, it stores the lone allocation of
  * each daemon representation, only pointers are then manipulated elsewhere.
@@ -43,6 +50,7 @@ main(int argc,
 	/* Process configuration */
 	scheduler_init(&scheduler);
 	networker_init(&networker);
+	spawns_init(&spawns);
 	daemons_init(&daemons);
 	running = true;
 	configuration(CONFIG_LOAD);
@@ -99,6 +107,7 @@ main(int argc,
 	}
 
 	daemons_destroy(&daemons);
+	spawns_destroy(&spawns);
 	networker_destroy(&networker);
 	scheduler_destroy(&scheduler);
 
