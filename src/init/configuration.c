@@ -25,14 +25,14 @@ expand_arguments(const char *args) {
 			int i;
 			char *str;
 
-			for (i = 0; i < p.we_wordc; ++i) {
+			for (i = 0; i < p.we_wordc; i += 1) {
 				total += strlen(p.we_wordv[i]) + 1;
 			}
 
 			arguments = malloc((p.we_wordc + 1) * sizeof (char *) + total);
 			str = (char *)(arguments + p.we_wordc + 1);
 
-			for (i = 0; i < p.we_wordc; ++i) {
+			for (i = 0; i < p.we_wordc; i += 1) {
 				arguments[i] = str;
 				str = stpcpy(str, p.we_wordv[i]) + 1;
 			}
@@ -130,13 +130,32 @@ configure(struct daemon *daemon,
 	}
 }
 
+static void
+configuration_load(struct dirent *entry,
+	FILE *filep) {
+	struct daemons_node *node = daemons_node_create(entry->d_name);
+
+	if (configure(&node->daemon, filep) == 0) {
+		extern struct daemons daemons;
+		daemons_insert(&daemons, node);
+	} else {
+		daemons_node_destroy(node);
+	}
+}
+
+static void
+configuration_reload(struct dirent *entry,
+	FILE *filep) {
+	log_print("Reloading configuration for \"%s\"...\n", entry->d_name);
+}
+
 void
 configuration(int loadtype) {
 	const char **iterator = configdirs;
 	const char **end = configdirs + sizeof (configdirs) / sizeof (char *);
 	char pathbuf[MAXPATHLEN];
 
-	for (; iterator != end; ++iterator) {
+	for (; iterator != end; iterator += 1) {
 		char *pathend = stpncpy(pathbuf, *iterator, sizeof (pathbuf));
 		size_t namemax;
 		DIR *dirp;
@@ -171,19 +190,12 @@ configuration(int loadtype) {
 				if ((filep = fopen(pathbuf, "r")) != NULL) {
 
 					switch (loadtype) {
-					case CONFIG_LOAD: {
-						struct daemons_node *node = daemons_node_create(entry->d_name);
-
-						if (configure(&node->daemon, filep) == 0) {
-							extern struct daemons daemons;
-							daemons_insert(&daemons, node);
-						} else {
-							daemons_node_destroy(node);
-						}
-					} break;
-					case CONFIG_RELOAD: {
-						log_print("Reloading configuration for \"%s\"...\n", entry->d_name);
-					} break;
+					case CONFIG_LOAD:
+						configuration_load(entry, filep);
+						break;
+					case CONFIG_RELOAD:
+						configuration_reload(entry, filep);
+						break;
 					default:
 						break;
 					}
