@@ -16,6 +16,8 @@ daemon_init(struct daemon *daemon,
 
 	daemon->file = NULL;
 	daemon->arguments = NULL;
+
+	daemon->pid = -1;
 }
 
 void
@@ -42,7 +44,7 @@ daemon_hash(const char *name) {
 		hash *= FNV_PRIME;
 		hash ^= *ptr;
 
-		++ptr;
+		ptr += 1;
 	}
 
 	return hash;

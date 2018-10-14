@@ -2,6 +2,7 @@
 #define DAEMON_H
 
 #include <stdint.h>
+#include <sys/types.h>
 
 enum daemon_state {
 	DAEMON_RUNNING,
@@ -18,6 +19,8 @@ struct daemon {
 
 	char *file;
 	char **arguments;
+
+	pid_t pid;	/**< pid is stored here, and not in spawns, because it allows O(1) access in configuration_reload */
 };
 
 void
