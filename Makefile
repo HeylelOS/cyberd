@@ -1,18 +1,16 @@
 CC=clang
 CFLAGS=-O3 -pedantic -Wall -fPIC
-BUILDDIRS=build/ build/bin/ build/lib/
+LDFLAGS=
+BUILDDIRS=build/ build/bin/
 
-INIT_SCHEDULER=$(wildcard sources/init/scheduler/*.c)
-INIT_NETWORKER=$(wildcard sources/init/networker/*.c)
-INIT_DAEMONS=$(wildcard sources/init/daemons/*.c)
-INIT_SPAWNS=$(wildcard sources/init/spawns/*.c)
-INIT_CORE=$(wildcard sources/init/*.c)
+INIT_SCHEDULER=$(wildcard src/init/scheduler/*.c)
+INIT_NETWORKER=$(wildcard src/init/networker/*.c)
+INIT_DAEMONS=$(wildcard src/init/daemons/*.c)
+INIT_SPAWNS=$(wildcard src/init/spawns/*.c)
+INIT_CORE=$(wildcard src/init/*.c)
 INIT_BIN=build/bin/cyberd
 
-LIB_CORE=$(wildcard sources/lib/*.c)
-LIB_BIN=build/lib/libcyberctl.so
-
-CTL_CORE=$(wildcard sources/ctl/*.c)
+CTL_CORE=$(wildcard src/ctl/*.c)
 CTL_BIN=build/bin/cyberctl
 
 .PHONY: all clean
@@ -26,11 +24,8 @@ $(BUILDDIRS):
 	mkdir $@
 
 $(INIT_BIN): $(INIT_CORE) $(INIT_SCHEDULER) $(INIT_NETWORKER) $(INIT_DAEMONS) $(INIT_SPAWNS)
-	$(CC) $(CFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
-$(LIB_BIN): $(LIB_CORE)
-	$(CC) $(CFLAGS) -shared -o $@ $^
-
-$(CTL_BIN): $(CTL_CORE) $(LIB_BIN)
-	$(CC) $(CFLAGS) -o $@ $^ -Isources/lib/ -Lbuild/lib/ -lcyberctl
+$(CTL_BIN): $(CTL_CORE)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 

@@ -4,7 +4,6 @@
 
 struct spawn {
 	struct daemon *daemon;
-	pid_t pid;
 	struct spawn *next;
 };
 
@@ -14,8 +13,8 @@ spawn_create(struct daemon *daemon,
 	struct spawn *next) {
 	struct spawn *spawn = malloc(sizeof(*spawn));
 
+	daemon->pid = pid;
 	spawn->daemon = daemon;
-	spawn->pid = pid;
 	spawn->next = next;
 
 	return spawn;
@@ -61,7 +60,7 @@ spawns_retrieve(struct spawns *spawns,
 	struct daemon *daemon = NULL;
 
 	while(*current != NULL
-		&& (*current)->pid != pid) {
+		&& (*current)->daemon->pid != pid) {
 
 		current = &(*current)->next;
 	}
@@ -70,6 +69,7 @@ spawns_retrieve(struct spawns *spawns,
 		struct spawn *spawn = *current;
 
 		daemon = spawn->daemon;
+		daemon->pid = -1;
 		*current = spawn->next;
 		spawn_destroy(spawn);
 	}
