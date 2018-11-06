@@ -8,7 +8,7 @@
 static FILE *out;
 
 void
-init_log(void) {
+log_init(void) {
 	out = stdout;
 }
 
