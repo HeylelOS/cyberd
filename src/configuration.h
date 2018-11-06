@@ -1,11 +1,11 @@
 #ifndef CONFIGURATION_H
 #define CONFIGURATION_H
 
-#define CONFIG_LOAD	0
-#define CONFIG_RELOAD	1
+void
+configuration_init(void);
 
 void
-configuration(int loadtype);
+configuration_reload(void);
 
 /* CONFIGURATION_H */
 #endif

@@ -1,11 +1,13 @@
-#include "log.h"
 #include "signals.h"
 #include "configuration.h"
-#include "spawns/spawns.h"
+#include "spawns.h"
+#include "log.h"
 
 #include <stdlib.h>
 #include <sys/wait.h>
 #include <stdbool.h>
+
+const sigset_t signals_selmask;
 
 static void
 sigterm_handler(int sig) {
@@ -17,15 +19,15 @@ sigterm_handler(int sig) {
 static void
 sighup_handler(int sig) {
 
-	configuration(CONFIG_RELOAD);
+	configuration_reload();
 }
 
 static void
 sigchld_handler(int sig) {
-	extern struct spawns spawns;
 	int status;
+	/* No waitpid errors may happen here */
 	pid_t child = waitpid(-1, &status, WNOHANG);
-	struct daemon *daemon = spawns_retrieve(&spawns, child);
+	struct daemon *daemon = spawns_retrieve(child);
 
 	if(daemon != NULL) {
 		log_print("Daemon %s (pid: %d) terminated with status: %d\n",
@@ -36,7 +38,9 @@ sigchld_handler(int sig) {
 }
 
 void
-init_signals(sigset_t *set) {
+signals_init(void) {
+	/* const qualifier only for external signature */
+	sigset_t *set = (sigset_t *)&signals_selmask;
 	struct sigaction action;
 
 	/* Define process' blocked signals */

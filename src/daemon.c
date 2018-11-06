@@ -1,23 +1,24 @@
-#include "log.h"
 #include "daemon.h"
-#include "spawns/spawns.h"
+#include "spawns.h"
+#include "log.h"
 
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
-void
-daemon_init(struct daemon *daemon,
-	const char *name) {
+struct daemon *
+daemon_create(const char *name) {
+	struct daemon *daemon = malloc(sizeof(*daemon));
 
 	daemon->name = strdup(name);
-	daemon->hash = daemon_hash(name);
 	daemon->state = DAEMON_STOPPED;
 
-	daemon->file = NULL;
-	daemon->arguments = NULL;
+	daemon->namehash = hash_string(name);
+	daemon->pid = 0;
 
-	daemon->pid = -1;
+	daemon_conf_init(&daemon->conf);
+
+	return daemon;
 }
 
 void
@@ -25,29 +26,7 @@ daemon_destroy(struct daemon *daemon) {
 
 	free(daemon->name);
 
-	free(daemon->file);
-	free(daemon->arguments);
-}
-
-/* Should implement a SipHash, FNV hash will do temporarily */
-
-#define FNV_OFFSET_BASIS	0xcbf29ce484222325	
-#define FNV_PRIME		0x100000001b3
-
-hash_t
-daemon_hash(const char *name) {
-	const uint8_t *ptr = (const uint8_t *)name;
-	const uint8_t *end = (const uint8_t *)name + strlen(name);
-	hash_t hash = FNV_OFFSET_BASIS;
-
-	while(ptr != end) {
-		hash *= FNV_PRIME;
-		hash ^= *ptr;
-
-		ptr += 1;
-	}
-
-	return hash;
+	daemon_conf_deinit(&daemon->conf);
 }
 
 void
@@ -67,20 +46,22 @@ daemon_start(struct daemon *daemon) {
 		if(pid == 0) {
 			extern char **environ;
 
-			if(daemon->arguments == NULL) {
-				daemon->arguments = alloca(2 * sizeof(char *));
-				daemon->arguments[0] = daemon->name;
-				daemon->arguments[1] = NULL;
+			if(daemon->conf.arguments == NULL) {
+				daemon->conf.arguments = alloca(2 * sizeof(char *));
+				daemon->conf.arguments[0] = daemon->name;
+				daemon->conf.arguments[1] = NULL;
 			}
 
-			execve(daemon->file, daemon->arguments, environ);
+			execve(daemon->conf.file,
+				daemon->conf.arguments,
+				environ);
 
 			exit(EXIT_FAILURE);
 		} else {
 			if(pid > 0) {
-				extern struct spawns spawns;
 
-				spawns_record(&spawns, daemon, pid);
+				daemon->pid = pid;
+				spawns_record(daemon);
 				log_print("    [daemon forked] with pid: %d\n", pid);
 			} else {
 				log_error("    [daemon fork]");
