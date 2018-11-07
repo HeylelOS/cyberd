@@ -37,35 +37,28 @@ daemon_start(struct daemon *daemon) {
 		log_print("[daemon %s start]: Already started\n", daemon->name);
 		break;
 	case DAEMON_STOPPED: {
-		pid_t pid;
+		extern char **environ;
+		char **arguments = daemon->conf.arguments;
+		int errcode;
 
-		log_print("[daemon %s start]: Starting...\n", daemon->name);
+		if(arguments == NULL) {
+			arguments = alloca(2 * sizeof(char *));
+			arguments[0] = daemon->name;
+			arguments[1] = NULL;
+		}
 
-		pid = fork();
+		if((errcode = posix_spawn(&daemon->pid, daemon->conf.path,
+			&daemon->conf.file_actions, &daemon->conf.attr,
+			daemon->conf.arguments, environ)) == 0) {
 
-		if(pid == 0) {
-			extern char **environ;
+			daemon->state = DAEMON_RUNNING;
+			spawns_record(daemon);
 
-			if(daemon->conf.arguments == NULL) {
-				daemon->conf.arguments = alloca(2 * sizeof(char *));
-				daemon->conf.arguments[0] = daemon->name;
-				daemon->conf.arguments[1] = NULL;
-			}
-
-			execve(daemon->conf.file,
-				daemon->conf.arguments,
-				environ);
-
-			exit(EXIT_FAILURE);
+			log_print("[daemon %s start] Started with pid: %d\n",
+				daemon->name, daemon->pid);
 		} else {
-			if(pid > 0) {
-
-				daemon->pid = pid;
-				spawns_record(daemon);
-				log_print("    [daemon forked] with pid: %d\n", pid);
-			} else {
-				log_error("    [daemon fork]");
-			}
+			log_print("[daemon %s start] Start failed: %s\n",
+				daemon->name, strerror(errcode));
 		}
 	} break;
 	case DAEMON_STOPPING:
