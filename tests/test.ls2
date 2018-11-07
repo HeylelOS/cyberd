@@ -1,5 +1,5 @@
 @config
-file=/bin/ls
+path=/bin/ls
 arguments=ls -al
 
 @startup

@@ -76,10 +76,10 @@ daemon_conf_parse(struct daemon_conf *conf,
 					/* log_print("Config: \"%s\" is set\n", line); */
 				} else {
 
-					if (strcmp(line, "file") == 0) {
+					if (strcmp(line, "path") == 0) {
 
-						free(conf->file);
-						conf->file = strdup(value);
+						free(conf->path);
+						conf->path = strdup(value);
 					} else if (strcmp(line, "arguments") == 0) {
 
 						free(conf->arguments);
@@ -105,6 +105,6 @@ daemon_conf_parse(struct daemon_conf *conf,
 
 	free(line);
 
-	return conf->file != NULL;
+	return conf->path != NULL;
 }
 
