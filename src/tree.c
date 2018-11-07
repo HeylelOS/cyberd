@@ -141,6 +141,10 @@ tree_node_remove(struct tree_node *root,
 			} else {
 				root = root->left;
 			}
+
+			(*removed)->left = NULL;
+			(*removed)->right = NULL;
+			(*removed)->height = 1;
 		}
 	}
 
