@@ -14,6 +14,8 @@ static const char *configdirs[] = {
 
 /* Main storage for daemons */
 static struct tree daemons;
+/* Temporary tree used when reloading configuration */
+static struct tree reloadtmp;
 
 static hash_t
 daemons_hash_field(const tree_element_t *element) {
@@ -103,13 +105,51 @@ configuration_init(void) {
 static void
 daemons_reload(const struct dirent *entry,
 	FILE *filep) {
+	struct tree_node *node
+		= tree_remove(&reloadtmp, hash_string(entry->d_name));
 
-	log_print("Reload '%s'\n", entry->d_name);
+	if(node == NULL) {
+		/* New daemon */
+		daemons_load(entry, filep);
+	} else {
+		/* Reloading existing daemon */
+		struct daemon *daemon = node->element;
+
+		daemon_conf_deinit(&daemon->conf);
+		daemon_conf_init(&daemon->conf);
+
+		if(daemon_conf_parse(&daemon->conf, filep)) {
+
+			tree_insert(&daemons, node);
+
+			log_print("Reloaded '%s'\n", daemon->name);
+		} else {
+			log_print("Error while reloading '%s'\n", daemon->name);
+
+			daemon_destroy(daemon);
+			tree_node_destroy(node);
+		}
+	}
+}
+
+static void
+daemons_preorder_cleanup(struct tree_node *node) {
+
+	if(node != NULL) {
+		daemon_destroy(node->element);
+
+		daemons_preorder_cleanup(node->left);
+		daemons_preorder_cleanup(node->right);
+	}
 }
 
 void
 configuration_reload(void) {
 
+	reloadtmp = daemons;
+	tree_init(&daemons, daemons_hash_field);
 	daemons_dir_iterate(daemons_reload);
+	daemons_preorder_cleanup(reloadtmp.root);
+	tree_deinit(&reloadtmp);
 }
 
