@@ -21,10 +21,10 @@ main(int argc,
 	/* cyberd environnement */
 	log_init();
 	signals_init();
-	configuration_init();
-	dispatcher_init();
-	scheduler_init();
 	spawns_init();
+	scheduler_init();
+	dispatcher_init();
+	configuration_init();
 	running = true;
 
 	log_print("Entering main loop...\n");

@@ -30,6 +30,8 @@ sigchld_handler(int sig) {
 	struct daemon *daemon = spawns_retrieve(child);
 
 	if (daemon != NULL) {
+		daemon->state = DAEMON_STOPPED;
+
 		log_print("Daemon %s (pid: %d) terminated with status: %d\n",
 			daemon->name, child, status);
 	} else {

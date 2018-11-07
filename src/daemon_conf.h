@@ -3,11 +3,15 @@
 
 #include <stdio.h>
 #include <stdbool.h>
+#include <spawn.h>
 
 /* struct to contain configurations */
 struct daemon_conf {
-	char *file;
+	char *path;
 	char **arguments;
+
+	posix_spawn_file_actions_t file_actions;
+	posix_spawnattr_t attr;
 };
 
 void
