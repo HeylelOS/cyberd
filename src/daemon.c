@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <signal.h>
 
 struct daemon *
 daemon_create(const char *name) {
@@ -24,9 +25,17 @@ daemon_create(const char *name) {
 void
 daemon_destroy(struct daemon *daemon) {
 
+	if(daemon->state != DAEMON_STOPPED) {
+		/* Remove daemon index in spawns if
+		previously spawned */
+		spawns_retrieve(daemon->pid);
+	}
+
 	free(daemon->name);
 
 	daemon_conf_deinit(&daemon->conf);
+
+	free(daemon);
 }
 
 void
@@ -49,7 +58,7 @@ daemon_start(struct daemon *daemon) {
 
 		if((errcode = posix_spawn(&daemon->pid, daemon->conf.path,
 			&daemon->conf.file_actions, &daemon->conf.attr,
-			daemon->conf.arguments, environ)) == 0) {
+			arguments, environ)) == 0) {
 
 			daemon->state = DAEMON_RUNNING;
 			spawns_record(daemon);
@@ -76,10 +85,8 @@ daemon_stop(struct daemon *daemon) {
 	switch(daemon->state) {
 	case DAEMON_RUNNING:
 		log_print("[daemon %s stop]: Stopping...\n", daemon->name);
-		/*
-			kill(daemon->pid, daemon->sigend);
-			daemon->state = DAEMON_STOPPING;
-		*/
+		kill(daemon->pid, daemon->conf.sigend);
+		daemon->state = DAEMON_STOPPING;
 		break;
 	case DAEMON_STOPPED:
 		log_print("[daemon %s stop]: Already stopped\n", daemon->name);
@@ -99,9 +106,7 @@ daemon_reload(struct daemon *daemon) {
 	switch(daemon->state) {
 	case DAEMON_RUNNING:
 		log_print("[daemon %s reload]: Reloading...\n", daemon->name);
-		/*
-			kill(daemon->pid, daemon->sigreload);
-		*/
+		kill(daemon->pid, daemon->conf.sigreload);
 		break;
 	case DAEMON_STOPPED:
 		log_print("[daemon %s reload]: Is stopped\n", daemon->name);
@@ -121,18 +126,14 @@ daemon_end(struct daemon *daemon) {
 	switch(daemon->state) {
 	case DAEMON_RUNNING:
 		log_print("[daemon %s end]: Was running, ending...\n", daemon->name);
-		/*
-			kill(daemon->pid, 9);
-		*/
+		kill(daemon->pid, SIGKILL);
 		break;
 	case DAEMON_STOPPED:
 		log_print("[daemon %s end]: Is stopped\n", daemon->name);
 		break;
 	case DAEMON_STOPPING:
 		log_print("[daemon %s end]: Ending...\n", daemon->name);
-		/*
-			kill(daemon->pid, 9);
-		*/
+		kill(daemon->pid, SIGKILL);
 		break;
 	default:
 		log_print("[daemon %s end]: Inconsistent state\n", daemon->name);

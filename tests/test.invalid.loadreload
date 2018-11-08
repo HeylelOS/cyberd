@@ -1,0 +1,4 @@
+path=/usr/bin/false
+@start
+load
+reload

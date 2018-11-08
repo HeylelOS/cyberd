@@ -38,14 +38,16 @@ daemon_conf_expand_arguments(const char *args) {
 	return arguments;
 }
 
-#define SECTION_UNKNOWN	-1
-#define SECTION_CONFIG	0
-#define SECTION_STARTUP	1
+enum daemon_conf_section {
+	SECTION_UNKNOWN,
+	SECTION_GENERAL,
+	SECTION_START
+};
 
 bool
 daemon_conf_parse(struct daemon_conf *conf,
 	FILE *filep) {
-	int section = SECTION_CONFIG;
+	enum daemon_conf_section section = SECTION_GENERAL;
 	ssize_t length;
 	char *line = NULL;
 	size_t linecap = 0;
@@ -57,10 +59,10 @@ daemon_conf_parse(struct daemon_conf *conf,
 		/* Reading beginning of section */
 		if(*line == '@') {
 
-			if(strcmp(line, "@config") == 0) {
-				section = SECTION_CONFIG;
-			} else if(strcmp(line, "@startup") == 0) {
-				section = SECTION_STARTUP;
+			if(strcmp(line, "@general") == 0) {
+				section = SECTION_GENERAL;
+			} else if(strcmp(line, "@start") == 0) {
+				section = SECTION_START;
 			} else {
 				section = SECTION_UNKNOWN;
 			}
@@ -71,9 +73,8 @@ daemon_conf_parse(struct daemon_conf *conf,
 			strsep(&value, "=");
 
 			switch(section) {
-			case SECTION_CONFIG:
+			case SECTION_GENERAL:
 				if(value == NULL) {
-					/* log_print("Config: \"%s\" is set\n", line); */
 				} else {
 
 					if(strcmp(line, "path") == 0) {
@@ -87,14 +88,15 @@ daemon_conf_parse(struct daemon_conf *conf,
 					}
 				}
 				break;
-			case SECTION_STARTUP:
+			case SECTION_START:
 				if(value == NULL) {
 
-					if(strcmp(line, "launch") == 0) {
-						/* Shall immediately launch the daemon */
+					if(strcmp(line, "load") == 0) {
+						conf->startmask |= DAEMON_START_LOAD;
+					} else if(strcmp(line, "reload") == 0) {
+						conf->startmask |= DAEMON_START_RELOAD;
 					}
 				} else {
-					/* log_print("Start: \"%s\"=\"%s\"\n", line, sep); */
 				}
 				break;
 			default:
