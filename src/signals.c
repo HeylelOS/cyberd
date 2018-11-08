@@ -25,17 +25,20 @@ sighup_handler(int sig) {
 static void
 sigchld_handler(int sig) {
 	int status;
-	/* No waitpid errors may happen here */
-	pid_t child = waitpid(-1, &status, WNOHANG);
-	struct daemon *daemon = spawns_retrieve(child);
+	pid_t child;
 
-	if (daemon != NULL) {
-		daemon->state = DAEMON_STOPPED;
+	/* Only ECHILD error may happen here */
+	while ((child = waitpid(-1, &status, WNOHANG)) > 0) {
+		struct daemon *daemon = spawns_retrieve(child);
 
-		log_print("Daemon %s (pid: %d) terminated with status: %d\n",
-			daemon->name, child, status);
-	} else {
-		log_print("Orphan process %d terminated\n", child);
+		if (daemon != NULL) {
+			daemon->state = DAEMON_STOPPED;
+
+			log_print("Daemon %s (pid: %d) terminated with status: %d\n",
+				daemon->name, child, status);
+		} else {
+			log_print("Orphan process %d terminated\n", child);
+		}
 	}
 }
 

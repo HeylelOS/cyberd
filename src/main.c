@@ -12,6 +12,7 @@
 
 /**
  * The running boolean determines when the main loop shall end.
+ * has visibility in the whole process
  */
 bool running;
 
@@ -73,7 +74,7 @@ main(int argc,
 				break;
 			}
 		} else if (errno != EINTR) {
-			/* Error, interrupts not considered */
+			/* Error, signal not considered */
 			log_error("[cyberd pselect]");
 		}
 	}

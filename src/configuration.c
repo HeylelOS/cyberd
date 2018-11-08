@@ -90,6 +90,10 @@ daemons_load(const struct dirent *entry,
 		tree_insert(&daemons, node);
 
 		log_print("Loaded '%s'\n", daemon->name);
+
+		if (DAEMON_START_AT(daemon, DAEMON_START_LOAD)) {
+			daemon_start(daemon);
+		}
 	} else {
 		daemon_destroy(daemon);
 	}
@@ -123,6 +127,10 @@ daemons_reload(const struct dirent *entry,
 			tree_insert(&daemons, node);
 
 			log_print("Reloaded '%s'\n", daemon->name);
+
+			if (DAEMON_START_AT(daemon, DAEMON_START_RELOAD)) {
+				daemon_start(daemon);
+			}
 		} else {
 			log_print("Error while reloading '%s'\n", daemon->name);
 
@@ -136,7 +144,9 @@ static void
 daemons_preorder_cleanup(struct tree_node *node) {
 
 	if (node != NULL) {
-		daemon_destroy(node->element);
+		struct daemon *daemon = node->element;
+
+		daemon_destroy(daemon);
 
 		daemons_preorder_cleanup(node->left);
 		daemons_preorder_cleanup(node->right);
