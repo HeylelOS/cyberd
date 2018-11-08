@@ -9,9 +9,17 @@
 struct daemon_conf {
 	char *path;
 	char **arguments;
+	int sigend; /* Signal used to end the process, default SIGTERM */
+	int sigreload; /* Signal used to reload the process configuration, default SIGHUP */
 
 	posix_spawn_file_actions_t file_actions;
 	posix_spawnattr_t attr;
+
+#define DAEMON_START_AT(d, m) (((d)->conf.startmask & (m)) != 0)
+#define DAEMON_START_LOAD (1 << 0)
+#define DAEMON_START_RELOAD (1 << 1)
+
+	int startmask;
 };
 
 void

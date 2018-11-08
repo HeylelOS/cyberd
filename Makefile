@@ -2,7 +2,6 @@ CC=clang
 CFLAGS=-O3 -pedantic -Wall -fPIC
 LDFLAGS=
 BUILDDIRS=build/ build/bin/
-
 INIT_SRC=$(wildcard src/*.c)
 INIT_DAEMON_CONF_SRC=$(wildcard src/daemon_conf/*.c)
 INIT_BIN=build/bin/cyberd

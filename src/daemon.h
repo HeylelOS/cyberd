@@ -16,28 +16,52 @@ struct daemon {
 	char *name;
 	enum daemon_state state;
 
-	/* The following are keys for fast tree access */
+	/* The following are also keys for fast tree access */
 	hash_t namehash;
 	pid_t pid;
 
 	struct daemon_conf conf;
 };
 
+/**
+ * Allocates a neww daemon, assigning name name
+ */
 struct daemon *
 daemon_create(const char *name);
 
+/**
+ * Frees every field of the struct, dereference
+ * in spawns if not DAEMON_STOPPED, frees the
+ * structure
+ */
 void
 daemon_destroy(struct daemon *daemon);
 
+/**
+ * Spawns a daemon if it was DAEMON_STOPPED,
+ * if successful, record it into spawns.
+ * Else does nothing
+ */
 void
 daemon_start(struct daemon *daemon);
 
+/**
+ * Send the termination signal if DAEMON_RUNNING
+ * setting it to DAEMON_STOPPING
+ */
 void
 daemon_stop(struct daemon *daemon);
 
+/**
+ * Sends the signal for reconfiguration
+ * to the daemon
+ */
 void
 daemon_reload(struct daemon *daemon);
 
+/**
+ * Force kill of the process if not DAEMON_STOPPED
+ */
 void
 daemon_end(struct daemon *daemon);
 
