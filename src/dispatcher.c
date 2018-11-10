@@ -5,8 +5,8 @@
 #include "config.h"
 
 #include <stdlib.h>
-#include <strings.h> /* for FD_COPY, ... on Darwin */
-#include <sys/socket.h> /* shutdown() */
+#include <strings.h> /* bcopy */
+#include <sys/socket.h> /* shutdown */
 
 static struct {
 	struct {
@@ -146,6 +146,6 @@ dispatcher_handle(unsigned int fds) {
 		}
 	}
 
-	FD_COPY(&dispatcher.sets->activeset, readset);
+	bcopy(&dispatcher.sets->activeset, readset, sizeof (fd_set));
 }
 
