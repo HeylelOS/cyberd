@@ -8,7 +8,6 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <errno.h>
-#include <sys/select.h>
 
 /**
  * The running boolean determines when the main loop shall end.
