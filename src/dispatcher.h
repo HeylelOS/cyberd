@@ -3,20 +3,20 @@
 
 #include <sys/select.h>
 
+#define dispatcher_writeset() NULL
+#define dispatcher_errorset() NULL
+
 void
 dispatcher_init(void);
 
 int
 dispatcher_lastfd(void);
 
-struct fd_set *
+fd_set *
 dispatcher_readset(void);
 
-struct fd_set *
-dispatcher_writeset(void);
-
 void
-dispatcher_handle(int fds);
+dispatcher_handle(unsigned int fds);
 
 /* DISPATCHER_H */
 #endif
