@@ -31,7 +31,7 @@ main(int argc,
 	log_print("Entering main loop...\n");
 	while (running) {
 		int fds;
-		fd_set *readfdsp, *writefdsp;
+		fd_set *readfdsp, *writefdsp, *errorfdsp;
 		const struct timespec *timeoutp;
 		extern const sigset_t signals_selmask;
 
@@ -39,13 +39,14 @@ main(int argc,
 		fds = dispatcher_lastfd() + 1;
 		readfdsp = dispatcher_readset();
 		writefdsp = dispatcher_writeset();
+		errorfdsp = dispatcher_errorset();
 
 		/* Fetch time before next action */
 		timeoutp = scheduler_next();
 
 		/* Wait for action */
 		fds = pselect(fds,
-			readfdsp, writefdsp, NULL,
+			readfdsp, writefdsp, errorfdsp,
 			timeoutp,
 			&signals_selmask);
 

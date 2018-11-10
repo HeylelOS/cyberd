@@ -3,14 +3,12 @@
 #include "log.h"
 #include "tree.h"
 
+#include "config.h" /* configurationdirs */
+
 #include <stdio.h>
 #include <sys/param.h>
 #include <string.h>
 #include <dirent.h>
-
-static const char *configdirs[] = {
-	"./tests"
-};
 
 /* Main storage for daemons */
 static struct tree daemons;
@@ -24,11 +22,11 @@ daemons_hash_field(const tree_element_t *element) {
 	return daemon->namehash;
 }
 
-/* Iterate each file in configdirs to load daemonconfs */
+/* Iterate each file in configurationdirs to load daemonconfs */
 static void
 daemons_dir_iterate(void (*callback)(const struct dirent *, FILE *)) {
-	const char **iterator = configdirs;
-	const char ** const end = configdirs + sizeof (configdirs) / sizeof (char *);
+	const char **iterator = configurationdirs;
+	const char ** const end = configurationdirs + sizeof (configurationdirs) / sizeof (char *);
 	char pathbuf[MAXPATHLEN];
 
 	for (; iterator != end; iterator += 1) {
