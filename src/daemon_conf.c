@@ -14,16 +14,16 @@ daemon_conf_init(struct daemon_conf *conf) {
 	posix_spawn_file_actions_init(&conf->file_actions);
 	posix_spawnattr_init(&conf->attr);
 
-	/* Default'ing daemon signal mask and handlers */
-	sigset_t sigset;
-
-	sigfillset(&sigset);
-	posix_spawnattr_setflags(&conf->attr, POSIX_SPAWN_SETSIGDEF);
-	posix_spawnattr_setsigdefault(&conf->attr, &sigset);
-
-	sigemptyset(&sigset);
+	/*
+	No need to redefine signals defaults because we unmask everyone,
+	and the posix_spawn standard specifies that:
+	"Signals set to be caught by the calling process shall be set
+	to the default action in the child process."
+	*/
+	sigset_t sigmask;
+	sigemptyset(&sigmask);
 	posix_spawnattr_setflags(&conf->attr, POSIX_SPAWN_SETSIGMASK);
-	posix_spawnattr_setsigmask(&conf->attr, &sigset);
+	posix_spawnattr_setsigmask(&conf->attr, &sigmask);
 
 	/* Zero'ing startmask */
 	conf->startmask = 0;

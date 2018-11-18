@@ -7,7 +7,8 @@
 
 #include <stdlib.h>
 #include <stdbool.h>
-#include <time.h>
+#include <unistd.h> /* sync */
+#include <time.h> /* nanosleep */
 #include <errno.h>
 
 /**
@@ -36,6 +37,9 @@ end(void) {
 	spawns_end();
 
 	log_print("Finished...\n");
+
+	/* Synchronize all filesystems to disk(s) */
+	sync();
 
 	exit(EXIT_SUCCESS);
 }
