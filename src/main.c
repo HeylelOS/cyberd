@@ -7,6 +7,7 @@
 
 #include <stdlib.h>
 #include <stdbool.h>
+#include <time.h>
 #include <errno.h>
 
 /**
@@ -14,6 +15,30 @@
  * has visibility in the whole process
  */
 bool running;
+
+static void __attribute__((noreturn))
+end(void) {
+	struct timespec req = {
+		.tv_sec = 5,
+		.tv_nsec = 0
+	}, rem;
+
+	spawns_stop();
+
+	dispatcher_deinit();
+
+	signals_ending();
+
+	while (!spawns_empty() && nanosleep(&req, &rem) == -1 && errno == EINTR) {
+		req = rem;
+	}
+
+	spawns_end();
+
+	log_print("Finished...\n");
+
+	exit(EXIT_SUCCESS);
+}
 
 int
 main(int argc,
@@ -79,8 +104,6 @@ main(int argc,
 		}
 	}
 
-	log_print("Finished...\n");
-
-	exit(EXIT_SUCCESS);
+	end();
 }
 

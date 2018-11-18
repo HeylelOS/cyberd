@@ -50,25 +50,6 @@ dispatcher_find(int fd) {
 	return tree_find(&dispatcher.fds, fd);
 }
 
-static void
-dispatcher_preorder_cleanup(struct tree_node *node) {
-
-	if (node != NULL) {
-		struct fd_element *fde = node->element;
-
-		fde_destroy(fde);
-
-		dispatcher_preorder_cleanup(node->left);
-		dispatcher_preorder_cleanup(node->right);
-	}
-}
-
-static void
-dispatcher_deinit(void) {
-
-	dispatcher_preorder_cleanup(dispatcher.fds.root);
-}
-
 void
 dispatcher_init(void) {
 
@@ -83,11 +64,27 @@ dispatcher_init(void) {
 
 	if (acceptor != NULL) {
 		dispatcher_insert(acceptor);
-
-		/* Cleanup needed because we must unlink acceptors */
-		atexit(dispatcher_deinit);
 	}
 
+}
+
+static void
+dispatcher_preorder_cleanup(struct tree_node *node) {
+
+	if (node != NULL) {
+		struct fd_element *fde = node->element;
+
+		fde_destroy(fde);
+
+		dispatcher_preorder_cleanup(node->left);
+		dispatcher_preorder_cleanup(node->right);
+	}
+}
+
+void
+dispatcher_deinit(void) {
+
+	dispatcher_preorder_cleanup(dispatcher.fds.root);
 }
 
 int

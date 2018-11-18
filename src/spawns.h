@@ -3,15 +3,24 @@
 
 #include "daemon.h"
 
+#include <stdbool.h>
+
 /**
  * spawns.h holds the structure which records every
- * spawn of every daemons. For now, it's a forward linked list,
- * which doesn't stop one daemon from having multiple spawns.
- * but we ensure it never happens.
+ * spawn of every daemons.
  */
 
 void
 spawns_init(void);
+
+void
+spawns_stop(void);
+
+bool
+spawns_empty(void);
+
+void
+spawns_end(void);
 
 void
 spawns_record(struct daemon *daemon);

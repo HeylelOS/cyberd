@@ -18,6 +18,50 @@ spawns_init(void) {
 	tree_init(&spawns, spawns_hash_field);
 }
 
+static void
+spawns_preorder_stop(struct tree_node *node) {
+
+	if (node != NULL) {
+		struct daemon *daemon = node->element;
+
+		daemon_stop(daemon);
+
+		spawns_preorder_stop(node->left);
+		spawns_preorder_stop(node->right);
+	}
+}
+
+void
+spawns_stop(void) {
+
+	spawns_preorder_stop(spawns.root);
+}
+
+bool
+spawns_empty(void) {
+
+	return spawns.root == NULL;
+}
+
+static void
+spawns_preorder_end(struct tree_node *node) {
+
+	if (node != NULL) {
+		struct daemon *daemon = node->element;
+
+		daemon_end(daemon);
+
+		spawns_preorder_end(node->left);
+		spawns_preorder_end(node->right);
+	}
+}
+
+void
+spawns_end(void) {
+
+	spawns_preorder_end(spawns.root);
+}
+
 void
 spawns_record(struct daemon *daemon) {
 	struct tree_node *node
