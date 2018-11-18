@@ -3,7 +3,7 @@
 #include "log.h"
 #include "tree.h"
 
-#include "config.h" /* configurationdirs */
+#include "../config.h" /* configurationdirs */
 
 #include <stdio.h>
 #include <sys/param.h>

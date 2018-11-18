@@ -1,6 +1,7 @@
 #include "fde.h"
 #include "log.h"
-#include "config.h"
+
+#include "../config.h"
 
 #include <stdlib.h>
 #include <unistd.h>
@@ -21,10 +22,9 @@ fde_create_acceptor(const char *path) {
 
 		if (end < addr.sun_path + SOCKADDR_UN_MAXLEN) {
 			addr.sun_family = AF_LOCAL;
-			*end = '\0';
 
 			if (bind(fd, (const struct sockaddr *)&addr, sizeof (addr)) == 0) {
-				if (listen(fd, DISPATCHER_CONNECTIONS_LIMIT) == 0) {
+				if (listen(fd, CYBERD_CONNECTIONS_LIMIT) == 0) {
 					fde = malloc(sizeof (*fde));
 
 					fde->type = FD_TYPE_ACCEPTOR;
@@ -57,6 +57,8 @@ fde_create_connection(const struct fd_element *acceptor) {
 
 		fde->type = FD_TYPE_CONNECTION;
 		fde->fd = fd;
+	} else {
+		log_error("[cyberd fde_create_connection accept]");
 	}
 
 	return fde;
@@ -77,6 +79,7 @@ fde_destroy(struct fd_element *fde) {
 	}
 
 	close(fde->fd);
+
 	free(fde);
 }
 
