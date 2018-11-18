@@ -9,8 +9,9 @@ static const char *configurationdirs[] CYBERD_UNUSED = {
 	"./test/daemons"
 };
 
-#define DISPATCHER_IPC_SOCKNAME "./test/ipc"
-#define DISPATCHER_CONNECTIONS_LIMIT	64
+#define CYBERD_CONNECTIONS_LIMIT 64
+
+#define CYBERD_IPC_PATH "./test/ipc"
 
 /* CONFIG_H */
 #endif

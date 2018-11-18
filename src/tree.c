@@ -235,9 +235,9 @@ tree_find(struct tree *tree,
 	while (current != NULL
 		&& tree->hash_field(current->element) != hash) {
 
-		if (tree->hash_field(current->element) < hash) {
+		if (hash < tree->hash_field(current->element)) {
 			current = current->left;
-		} else { /* tree->hash_field(current->element) > hash */
+		} else { /* tree->hash_field(current->element) < hash */
 			current = current->right;
 		}
 	}
