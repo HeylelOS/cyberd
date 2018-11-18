@@ -14,12 +14,16 @@ daemon_conf_init(struct daemon_conf *conf) {
 	posix_spawn_file_actions_init(&conf->file_actions);
 	posix_spawnattr_init(&conf->attr);
 
-	/* Default'ing daemon signal mask */
-	sigset_t sigdefault;
-	sigfillset(&sigdefault);
+	/* Default'ing daemon signal mask and handlers */
+	sigset_t sigset;
 
+	sigfillset(&sigset);
 	posix_spawnattr_setflags(&conf->attr, POSIX_SPAWN_SETSIGDEF);
-	posix_spawnattr_setsigdefault(&conf->attr, &sigdefault);
+	posix_spawnattr_setsigdefault(&conf->attr, &sigset);
+
+	sigemptyset(&sigset);
+	posix_spawnattr_setflags(&conf->attr, POSIX_SPAWN_SETSIGMASK);
+	posix_spawnattr_setsigmask(&conf->attr, &sigset);
 
 	/* Zero'ing startmask */
 	conf->startmask = 0;

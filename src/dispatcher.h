@@ -9,6 +9,10 @@
 void
 dispatcher_init(void);
 
+/* dispatcher_deinit required because we must unlink acceptors */
+void
+dispatcher_deinit(void);
+
 int
 dispatcher_lastfd(void);
 

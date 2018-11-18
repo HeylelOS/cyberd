@@ -73,3 +73,12 @@ signals_init(void) {
 	sigdelset(set, SIGCHLD);
 }
 
+void
+signals_ending(void) {
+	sigset_t unblock;
+
+	sigemptyset(&unblock);
+	sigaddset(&unblock, SIGCHLD);
+	sigprocmask(SIG_UNBLOCK, &unblock, NULL);
+}
+
