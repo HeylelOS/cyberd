@@ -2,10 +2,12 @@
 #include "log.h"
 #include "tree.h"
 #include "fde.h"
-#include "config.h"
+
+#include "../config.h"
 
 #include <stdlib.h>
-#include <strings.h> /* bcopy */
+#include <unistd.h>
+#include <string.h> /* memcpy, memset */
 #include <sys/socket.h> /* shutdown */
 
 static struct {
@@ -70,12 +72,14 @@ dispatcher_deinit(void) {
 void
 dispatcher_init(void) {
 
-	dispatcher.sets = calloc(1, sizeof(dispatcher.sets));
+	dispatcher.sets = malloc(sizeof(*dispatcher.sets));
+	memset(&dispatcher.sets->activeset, 0, sizeof(fd_set));
+	memset(&dispatcher.sets->readset, 0, sizeof(fd_set));
 
 	tree_init(&dispatcher.fds, dispatcher_hash_fd);
 
 	struct fd_element *acceptor
-		= fde_create_acceptor(DISPATCHER_IPC_SOCKNAME);
+		= fde_create_acceptor(CYBERD_IPC_PATH);
 
 	if(acceptor != NULL) {
 		dispatcher_insert(acceptor);
@@ -91,13 +95,12 @@ dispatcher_lastfd(void) {
 	struct tree_node *current = dispatcher.fds.root;
 	int lastfd = -1;
 
-	while(current != NULL) {
-		current = current->right;
-	}
-
 	if(current != NULL) {
-		const struct fd_element *fde = current->element;
+		while(current->right != NULL) {
+			current = current->right;
+		}
 
+		const struct fd_element *fde = current->element;
 		lastfd = fde->fd;
 	}
 
@@ -107,22 +110,33 @@ dispatcher_lastfd(void) {
 fd_set *
 dispatcher_readset(void) {
 
-	return &dispatcher.sets->readset;
+	return memcpy(&dispatcher.sets->readset,
+		&dispatcher.sets->activeset,
+		sizeof(fd_set));
 }
 
 static void
-dispatcher_handle_acceptor(struct fd_element *fde) {
+dispatcher_handle_acceptor(struct fd_element *acceptor) {
+	struct fd_element *connection
+		= fde_create_connection(acceptor);
 
-	log_print("Can read acceptor %d\n", fde->fd);
+	if(connection != NULL) {
+		dispatcher_insert(connection);
+	}
 }
 
 static void
-dispatcher_handle_connection(struct fd_element *fde) {
+dispatcher_handle_connection(struct fd_element *connection) {
+	char buffer[512];
+	ssize_t readval;
 
-	log_print("Can read connection %d\n", fde->fd);
-
-	shutdown(fde->fd, SHUT_RDWR);
-	dispatcher_remove(fde);
+	if((readval = read(connection->fd, buffer, sizeof(buffer))) > 0) {
+		write(STDOUT_FILENO, buffer, readval);
+		shutdown(connection->fd, SHUT_RDWR);
+	} else if(readval == 0) {
+		dispatcher_remove(connection);
+		fde_destroy(connection);
+	}
 }
 
 void
@@ -130,11 +144,12 @@ dispatcher_handle(unsigned int fds) {
 	fd_set *readset = &dispatcher.sets->readset;
 
 	for(unsigned int fd = 0;
-		fd < fds;
+		fds != 0 && fd < FD_SETSIZE;
 		fd += 1) {
 
 		if(FD_ISSET(fd, readset)) {
 			struct fd_element *fde = dispatcher_find(fd);
+			fds -= 1;
 
 			switch(fde->type) {
 			case FD_TYPE_ACCEPTOR:
@@ -148,7 +163,5 @@ dispatcher_handle(unsigned int fds) {
 			}
 		}
 	}
-
-	bcopy(&dispatcher.sets->activeset, readset, sizeof(fd_set));
 }
 
