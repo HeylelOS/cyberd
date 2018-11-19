@@ -3,6 +3,7 @@
 #include "tree.h"
 
 #include <stdlib.h>
+#include <sys/wait.h>
 
 static struct tree spawns;
 

@@ -29,6 +29,8 @@ end(void) {
 		.tv_nsec = 0
 	}, rem;
 
+	log_print("Ending...");
+
 	/* Notify spawns they should stop */
 	spawns_stop();
 	/* Destroying dispatcher, to unlink acceptors */
@@ -51,7 +53,7 @@ end(void) {
 		spawns_end();
 	}
 
-	/* log closing */
+	/* log ending */
 	log_deinit();
 
 	/* Synchronize all filesystems to disk(s),
@@ -122,7 +124,7 @@ main(int argc,
 			}
 		} else if(errno != EINTR) {
 			/* Error, signal not considered */
-			log_error("[cyberd pselect]");
+			log_error("pselect");
 		}
 	}
 

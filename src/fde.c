@@ -8,6 +8,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <errno.h> /* to show overflow in fde_create_acceptor */
 
 #define SOCKADDR_UN_MAXLEN sizeof(((struct sockaddr_un *)NULL)->sun_path)
 
@@ -30,16 +31,17 @@ fde_create_acceptor(const char *path) {
 					fde->type = FD_TYPE_ACCEPTOR;
 					fde->fd = fd;
 				} else {
-					log_error("[cyberd fde_create_acceptor listen]");
+					log_error("fde_create_acceptor listen");
 				}
 			} else {
-				log_error("[cyberd fde_create_acceptor bind]");
+				log_error("fde_create_acceptor bind");
 			}
 		} else {
-			log_print("[cyberd fde_create_acceptor]: error: path overflow\n");
+			errno = EOVERFLOW;
+			log_error("fde_create_acceptor");
 		}
 	} else {
-		log_error("[cyberd fde_create_acceptor socket]");
+		log_error("fde_create_acceptor socket");
 	}
 
 	return fde;
@@ -58,7 +60,7 @@ fde_create_connection(const struct fd_element *acceptor) {
 		fde->type = FD_TYPE_CONNECTION;
 		fde->fd = fd;
 	} else {
-		log_error("[cyberd fde_create_connection accept]");
+		log_error("fde_create_connection accept");
 	}
 
 	return fde;
