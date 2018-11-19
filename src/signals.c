@@ -27,7 +27,6 @@ sigchld_handler(int sig) {
 	int status;
 	pid_t child;
 
-	/* Only ECHILD error may happen here */
 	while ((child = waitpid(-1, &status, WNOHANG)) > 0) {
 		struct daemon *daemon = spawns_retrieve(child);
 
@@ -74,11 +73,20 @@ signals_init(void) {
 }
 
 void
-signals_ending(void) {
+signals_stopping(void) {
 	sigset_t unblock;
 
 	sigemptyset(&unblock);
 	sigaddset(&unblock, SIGCHLD);
 	sigprocmask(SIG_UNBLOCK, &unblock, NULL);
+}
+
+void
+signals_ending(void) {
+	sigset_t block;
+
+	sigemptyset(&block);
+	sigaddset(&block, SIGCHLD);
+	sigprocmask(SIG_BLOCK, &block, NULL);
 }
 

@@ -24,7 +24,7 @@ struct daemon {
 };
 
 /**
- * Allocates a new daemon, assigning name name
+ * Allocates a new daemon, copying name name
  */
 struct daemon *
 daemon_create(const char *name);

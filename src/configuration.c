@@ -9,6 +9,7 @@
 #include <sys/param.h>
 #include <string.h>
 #include <dirent.h>
+#include <errno.h> /* to show overflow in daemons_dir_iterate */
 
 /* Main storage for daemons */
 static struct tree daemons;
@@ -37,7 +38,8 @@ daemons_dir_iterate(void (*callback)(const struct dirent *, FILE *)) {
 
 		/* Preparing path iteration */
 		if (pathend >= pathbuf + sizeof (pathbuf) - 1) {
-			log_error("[cyberd daemons_dir_iterate] Path buffer overflow\n");
+			errno = EOVERFLOW;
+			log_error("daemons_dir_iterate");
 			continue;
 		}
 		*pathend = '/';
@@ -46,9 +48,12 @@ daemons_dir_iterate(void (*callback)(const struct dirent *, FILE *)) {
 
 		/* Open load directory */
 		if ((dirp = opendir(pathbuf)) == NULL) {
-			log_print("[cyberd daemons_dir_iterate] Unable to open directory \"%s\"\n", pathbuf);
+			log_print("daemons_dir_iterate: Unable to open configuration directory \"%s\"\n",
+				pathbuf);
 			continue;
 		}
+
+		log_print("Iterating configuration directory '%s'\n", pathbuf);
 
 		/* Iterating load directory */
 		while ((entry = readdir(dirp)) != NULL) {
@@ -65,7 +70,7 @@ daemons_dir_iterate(void (*callback)(const struct dirent *, FILE *)) {
 					callback(entry, filep);
 					fclose(filep);
 				} else {
-					log_error("[cyberd fopen]");
+					log_error("fopen");
 				}
 
 				/* Closing path */
@@ -100,6 +105,7 @@ daemons_load(const struct dirent *entry,
 void
 configuration_init(void) {
 
+	log_print("Configurating...");
 	tree_init(&daemons, daemons_hash_field);
 	daemons_dir_iterate(daemons_load);
 }
@@ -154,6 +160,7 @@ daemons_preorder_cleanup(struct tree_node *node) {
 void
 configuration_reload(void) {
 
+	log_print("Reconfigurating...");
 	reloadtmp = daemons;
 	tree_init(&daemons, daemons_hash_field);
 	daemons_dir_iterate(daemons_reload);

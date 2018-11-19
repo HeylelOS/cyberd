@@ -9,6 +9,9 @@ void
 signals_init(void);
 
 void
+signals_stopping(void);
+
+void
 signals_ending(void);
 
 /* SIGNALS_H */
