@@ -1,15 +1,19 @@
 #include "log.h"
 
-#include <stdio.h>
-#include <errno.h>
+#include <syslog.h>
 #include <stdarg.h>
-#include <string.h>
-
-static FILE *out;
 
 void
 log_init(void) {
-	out = stdout;
+
+	setlogmask(LOG_MASK(LOG_NOTICE) | LOG_MASK(LOG_ERR));
+	openlog("cyberd", LOG_NDELAY | LOG_PID, LOG_USER);
+}
+
+void
+log_deinit(void) {
+
+	closelog();
 }
 
 void
@@ -18,13 +22,13 @@ log_print(const char *format,
 	va_list ap;
 
 	va_start(ap, format);
-	vfprintf(out, format, ap);
+	vsyslog(LOG_NOTICE, format, ap);
 	va_end(ap);
 }
 
 void
 log_error(const char *message) {
 
-	fprintf(out, "%s: %s\n", message, strerror(errno));
+	syslog(LOG_ERR, "%s: %m\n", message);
 }
 

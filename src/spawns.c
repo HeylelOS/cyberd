@@ -1,4 +1,5 @@
 #include "spawns.h"
+#include "log.h"
 #include "tree.h"
 
 #include <stdlib.h>
@@ -58,8 +59,23 @@ spawns_preorder_end(struct tree_node *node) {
 
 void
 spawns_end(void) {
+	int status;
+	pid_t child;
 
 	spawns_preorder_end(spawns.root);
+
+	while((child = wait(&status)) > 0) {
+		struct daemon *daemon = spawns_retrieve(child);
+
+		if(daemon != NULL) {
+			daemon->state = DAEMON_STOPPED;
+
+			log_print("Daemon %s (pid: %d) force-ended with status: %d\n",
+				daemon->name, child, status);
+		} else {
+			log_print("Orphan process %d force-ended\n", child);
+		}
+	}
 }
 
 void

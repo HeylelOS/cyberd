@@ -17,6 +17,11 @@
  */
 bool running;
 
+/**
+ * Ending init, lot of cleanup, the daemons timeout is 5 seconds,
+ * Note some structures (scheduler) are not freed, because
+ * they do not hold sensible system ressources, such as locks, files..
+ */
 static void __attribute__((noreturn))
 end(void) {
 	struct timespec req = {
@@ -24,23 +29,34 @@ end(void) {
 		.tv_nsec = 0
 	}, rem;
 
+	/* Notify spawns they should stop */
 	spawns_stop();
-
+	/* Destroying dispatcher, to unlink acceptors */
 	dispatcher_deinit();
+	/* Modifying the signal mask so we accept SIGCHLD now */
+	signals_stopping();
 
-	signals_ending();
-
+	/* While there are spawns, and we didn't time out,
+	we wait spawns for 5 seconds */
 	while(!spawns_empty()
 		&& nanosleep(&req, &rem) == -1
 		&& errno == EINTR) {
 		req = rem;
 	}
 
-	spawns_end();
+	/* If some children didn't exit, we re-block SIGCHLD
+	and SIGKILL/wait everyone else (the wait is meant to log them) */
+	if(!spawns_empty()) {
+		signals_ending();
+		spawns_end();
+	}
 
-	log_print("Finished...\n");
+	/* log closing */
+	log_deinit();
 
-	/* Synchronize all filesystems to disk(s) */
+	/* Synchronize all filesystems to disk(s),
+	note: Standard specifies it may return before all syncs done,
+	but the Linux kernel is synchronous */
 	sync();
 
 	exit(EXIT_SUCCESS);
@@ -49,7 +65,7 @@ end(void) {
 int
 main(int argc,
 	char **argv) {
-	/* cyberd environnement */
+	/* Environnement initialization, order matters */
 	log_init();
 	signals_init();
 	spawns_init();
@@ -110,6 +126,7 @@ main(int argc,
 		}
 	}
 
+	/* Clean up, and shutdown/reboot */
 	end();
 }
 
