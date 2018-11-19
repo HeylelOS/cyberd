@@ -43,7 +43,7 @@ daemon_start(struct daemon *daemon) {
 
 	switch (daemon->state) {
 	case DAEMON_RUNNING:
-		log_print("[daemon %s start]: Already started\n", daemon->name);
+		log_print("Daemon start '%s': Already started\n", daemon->name);
 		break;
 	case DAEMON_STOPPED: {
 		extern char **environ;
@@ -63,18 +63,18 @@ daemon_start(struct daemon *daemon) {
 			daemon->state = DAEMON_RUNNING;
 			spawns_record(daemon);
 
-			log_print("[daemon %s start] Started with pid: %d\n",
+			log_print("Daemon start '%s': Started with pid: %d\n",
 				daemon->name, daemon->pid);
 		} else {
-			log_print("[daemon %s start] Start failed: %s\n",
+			log_print("Daemon start '%s': Start failed: %s\n",
 				daemon->name, strerror(errcode));
 		}
 	} break;
 	case DAEMON_STOPPING:
-		log_print("[daemon %s start]: Is stopping\n", daemon->name);
+		log_print("Daemon start '%s': Is stopping\n", daemon->name);
 		break;
 	default:
-		log_print("[daemon %s start]: Inconsistent state\n", daemon->name);
+		log_print("Daemon start '%s': Inconsistent state\n", daemon->name);
 		break;
 	}
 }
@@ -84,18 +84,18 @@ daemon_stop(struct daemon *daemon) {
 
 	switch (daemon->state) {
 	case DAEMON_RUNNING:
-		log_print("[daemon %s stop]: Stopping...\n", daemon->name);
+		log_print("Daemon stop '%s': Stopping...\n", daemon->name);
 		kill(daemon->pid, daemon->conf.sigend);
 		daemon->state = DAEMON_STOPPING;
 		break;
 	case DAEMON_STOPPED:
-		log_print("[daemon %s stop]: Already stopped\n", daemon->name);
+		log_print("Daemon stop '%s': Already stopped\n", daemon->name);
 		break;
 	case DAEMON_STOPPING:
-		log_print("[daemon %s stop]: Is stopping\n", daemon->name);
+		log_print("Daemon stop '%s': Is stopping\n", daemon->name);
 		break;
 	default:
-		log_print("[daemon %s stop]: Inconsistent state\n", daemon->name);
+		log_print("Daemon stop '%s': Inconsistent state\n", daemon->name);
 		break;
 	}
 }
@@ -105,17 +105,17 @@ daemon_reload(struct daemon *daemon) {
 
 	switch (daemon->state) {
 	case DAEMON_RUNNING:
-		log_print("[daemon %s reload]: Reloading...\n", daemon->name);
+		log_print("Daemon reload '%s': Reloading...\n", daemon->name);
 		kill(daemon->pid, daemon->conf.sigreload);
 		break;
 	case DAEMON_STOPPED:
-		log_print("[daemon %s reload]: Is stopped\n", daemon->name);
+		log_print("Daemon reload '%s': Is stopped\n", daemon->name);
 		break;
 	case DAEMON_STOPPING:
-		log_print("[daemon %s reload]: Is stopping\n", daemon->name);
+		log_print("Daemon reload '%s': Is stopping\n", daemon->name);
 		break;
 	default:
-		log_print("[daemon %s reload]: Inconsistent state\n", daemon->name);
+		log_print("Daemon reload '%s': Inconsistent state\n", daemon->name);
 		break;
 	}
 }
@@ -125,18 +125,18 @@ daemon_end(struct daemon *daemon) {
 
 	switch (daemon->state) {
 	case DAEMON_RUNNING:
-		log_print("[daemon %s end]: Was running, ending...\n", daemon->name);
+		log_print("Daemon end '%s': Was running, ending...\n", daemon->name);
 		kill(daemon->pid, SIGKILL);
 		break;
 	case DAEMON_STOPPED:
-		log_print("[daemon %s end]: Is stopped\n", daemon->name);
+		log_print("Daemon end '%s': Is stopped\n", daemon->name);
 		break;
 	case DAEMON_STOPPING:
-		log_print("[daemon %s end]: Ending...\n", daemon->name);
+		log_print("Daemon end '%s': Ending...\n", daemon->name);
 		kill(daemon->pid, SIGKILL);
 		break;
 	default:
-		log_print("[daemon %s end]: Inconsistent state\n", daemon->name);
+		log_print("Daemon end '%s': Inconsistent state\n", daemon->name);
 		break;
 	}
 }

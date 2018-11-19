@@ -22,3 +22,4 @@ hash_string(const char *string) {
 
 	return hash;
 }
+
