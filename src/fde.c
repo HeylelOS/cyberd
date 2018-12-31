@@ -13,7 +13,7 @@
 #define SOCKADDR_UN_MAXLEN sizeof (((struct sockaddr_un *)NULL)->sun_path)
 
 struct fd_element *
-fde_create_acceptor(const char *path) {
+fde_create_acceptor(const char *path, fde_caps_t caps) {
 	struct fd_element *fde = NULL;
 	int fd = socket(AF_LOCAL, SOCK_STREAM, 0);
 
@@ -28,7 +28,7 @@ fde_create_acceptor(const char *path) {
 				if (listen(fd, CYBERD_CONNECTIONS_LIMIT) == 0) {
 					fde = malloc(sizeof (*fde));
 
-					fde->type = FD_TYPE_ACCEPTOR;
+					fde->caps = caps | FDE_CAPS_ACCEPTOR;
 					fde->fd = fd;
 				} else {
 					log_error("fde_create_acceptor listen");
@@ -57,7 +57,7 @@ fde_create_connection(const struct fd_element *acceptor) {
 	if (fd != -1) {
 		fde = malloc(sizeof (*fde));
 
-		fde->type = FD_TYPE_CONNECTION;
+		fde->caps = acceptor->caps & ~FDE_CAPS_ACCEPTOR;
 		fde->fd = fd;
 	} else {
 		log_error("fde_create_connection accept");
@@ -69,7 +69,7 @@ fde_create_connection(const struct fd_element *acceptor) {
 void
 fde_destroy(struct fd_element *fde) {
 
-	if (fde->type == FD_TYPE_ACCEPTOR) {
+	if ((fde->caps & FDE_CAPS_ACCEPTOR) != 0) {
 		struct sockaddr_un addr;
 		socklen_t len = sizeof (addr);
 

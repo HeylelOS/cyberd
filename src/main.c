@@ -11,6 +11,10 @@
 #include <time.h> /* nanosleep */
 #include <errno.h>
 
+#ifndef CYBERD_NORETURN
+#define CYBERD_NORETURN __attribute__((noreturn))
+#endif
+
 /**
  * The running boolean determines when the main loop shall end.
  * has visibility in the whole process
@@ -22,7 +26,7 @@ bool running;
  * Note some structures (scheduler) are not freed, because
  * they do not hold sensible system ressources, such as locks, files..
  */
-static void __attribute__((noreturn))
+static void CYBERD_NORETURN
 end(void) {
 	struct timespec req = {
 		.tv_sec = 5,
