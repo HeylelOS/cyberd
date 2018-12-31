@@ -60,12 +60,17 @@ dispatcher_init(void) {
 	tree_init(&dispatcher.fds, dispatcher_hash_fd);
 
 	struct fd_element *acceptor
-		= fde_create_acceptor(CYBERD_IPC_PATH);
+		= fde_create_acceptor(CYBERCTL_IPC_PATH,
+			FDE_CAPS_ACCEPTOR_CREATOR | 
+			FDE_CAPS_DAEMONS_ALL |
+			FDE_CAPS_SHUTDOWN_ALL);
 
 	if (acceptor != NULL) {
 		dispatcher_insert(acceptor);
+	} else {
+		log_print("dispatcher_init: Unable to create '%s' acceptor\n",
+			CYBERCTL_IPC_PATH);
 	}
-
 }
 
 static void
@@ -145,15 +150,10 @@ dispatcher_handle(unsigned int fds) {
 			struct fd_element *fde = dispatcher_find(fd);
 			fds -= 1;
 
-			switch (fde->type) {
-			case FD_TYPE_ACCEPTOR:
+			if ((fde->caps & FDE_CAPS_ACCEPTOR) != 0) {
 				dispatcher_handle_acceptor(fde);
-				break;
-			case FD_TYPE_CONNECTION:
+			} else {
 				dispatcher_handle_connection(fde);
-				break;
-			default:
-				break;
 			}
 		}
 	}

@@ -22,7 +22,7 @@ main(int argc,
 	char **argv) {
 	const struct sockaddr_un addr = {
 		.sun_family = AF_LOCAL,
-		.sun_path = CYBERD_IPC_PATH
+		.sun_path = CYBERCTL_IPC_PATH
 	};
 	int fd = socket(AF_LOCAL, SOCK_STREAM, 0);
 	cyberctlname = *argv;
