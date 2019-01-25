@@ -3,6 +3,7 @@
 #include "log.h"
 #include "tree.h"
 
+#include "scheduler.h"
 #include "../config.h" /* configurationdirs */
 
 #include <stdio.h>
@@ -94,7 +95,7 @@ daemons_load(const struct dirent *entry,
 
 		log_print("Loaded '%s'\n", daemon->name);
 
-		if (DAEMON_START_AT(daemon, DAEMON_START_LOAD)) {
+		if (DAEMON_STARTS_AT(daemon, DAEMON_START_LOAD)) {
 			daemon_start(daemon);
 		}
 	} else {
@@ -132,7 +133,7 @@ daemons_reload(const struct dirent *entry,
 
 			log_print("Reloaded '%s'\n", daemon->name);
 
-			if (DAEMON_START_AT(daemon, DAEMON_START_RELOAD)) {
+			if (DAEMON_STARTS_AT(daemon, DAEMON_START_RELOAD)) {
 				daemon_start(daemon);
 			}
 		} else {
@@ -161,6 +162,7 @@ void
 configuration_reload(void) {
 
 	log_print("Reconfigurating...");
+	scheduler_empty();
 	reloadtmp = daemons;
 	tree_init(&daemons, daemons_hash_field);
 	daemons_dir_iterate(daemons_reload);
