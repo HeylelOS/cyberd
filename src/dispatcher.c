@@ -3,6 +3,7 @@
 #include "tree.h"
 #include "fde.h"
 
+#include "scheduler.h"
 #include "../config.h"
 
 #include <stdlib.h>
@@ -60,16 +61,16 @@ dispatcher_init(void) {
 	tree_init(&dispatcher.fds, dispatcher_hash_fd);
 
 	struct fd_element *acceptor
-		= fde_create_acceptor(CYBERCTL_IPC_PATH,
-			FDE_CAPS_ACCEPTOR_CREATOR | 
-			FDE_CAPS_DAEMONS_ALL |
-			FDE_CAPS_SHUTDOWN_ALL);
+		= fde_create_acceptor(INITCTL_PATH,
+			FDE_PERM_CREATE_CONTROL | 
+			FDE_PERM_DAEMON_ALL |
+			FDE_PERM_SYSTEM_ALL);
 
 	if(acceptor != NULL) {
 		dispatcher_insert(acceptor);
 	} else {
 		log_print("dispatcher_init: Unable to create '%s' acceptor\n",
-			CYBERCTL_IPC_PATH);
+			INITCTL_PATH);
 	}
 }
 
@@ -133,8 +134,26 @@ dispatcher_handle_connection(struct fd_element *connection) {
 	ssize_t readval;
 
 	if((readval = read(connection->fd, buffer, sizeof(buffer))) > 0) {
-		write(STDOUT_FILENO, buffer, readval);
-		shutdown(connection->fd, SHUT_RDWR);
+		const char *current = buffer;
+		const char * const end = current + readval;
+
+		while(current < end) {
+			if(fde_connection_control(connection, *current)
+				&& connection->control.command != COMMAND_UNDEFINED) {
+				if(connection->control.command != COMMAND_CREATE_CONTROL) {
+				} else {
+					struct scheduler_activity activity = {
+						.daemon = NULL,
+						.when = connection->control.when,
+						.action = connection->control.command
+					};
+
+					scheduler_schedule(&activity);
+				}
+			}
+
+			current += 1;
+		}
 	} else if(readval == 0) {
 		dispatcher_remove(connection);
 		fde_destroy(connection);
@@ -153,7 +172,7 @@ dispatcher_handle(unsigned int fds) {
 			struct fd_element *fde = dispatcher_find(fd);
 			fds -= 1;
 
-			if((fde->caps & FDE_CAPS_ACCEPTOR) != 0) {
+			if((fde->perms & FDE_PERM_ACCEPTOR) != 0) {
 				dispatcher_handle_acceptor(fde);
 			} else {
 				dispatcher_handle_connection(fde);

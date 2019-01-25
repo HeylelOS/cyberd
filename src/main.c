@@ -85,7 +85,6 @@ main(int argc,
 		int fds;
 		fd_set *readfdsp, *writefdsp, *errorfdsp;
 		const struct timespec *timeoutp;
-		extern const sigset_t signals_selmask;
 
 		/* Fetch dispatcher indications */
 		fds = dispatcher_lastfd() + 1;
@@ -113,13 +112,13 @@ main(int argc,
 			scheduler_dequeue(&activity);
 
 			switch(activity.action) {
-			case SCHEDULE_START:
+			case SCHEDULE_DAEMON_START:
 				daemon_start(activity.daemon);
 				break;
-			case SCHEDULE_STOP:
+			case SCHEDULE_DAEMON_STOP:
 				daemon_stop(activity.daemon);
 				break;
-			case SCHEDULE_RELOAD:
+			case SCHEDULE_DAEMON_RELOAD:
 				daemon_reload(activity.daemon);
 				break;
 			default:

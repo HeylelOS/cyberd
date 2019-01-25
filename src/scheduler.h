@@ -2,6 +2,7 @@
 #define SCHEDULER_H
 
 #include "daemon.h"
+
 #include <sys/types.h>
 #include <sys/time.h>
 
@@ -21,9 +22,14 @@
  */
 
 enum scheduler_action {
-	SCHEDULE_START,
-	SCHEDULE_STOP,
-	SCHEDULE_RELOAD
+	SCHEDULE_CREATE_CONTROL,
+	SCHEDULE_DAEMON_START,
+	SCHEDULE_DAEMON_STOP,
+	SCHEDULE_DAEMON_RELOAD,
+	SCHEDULE_DAEMON_END,
+	SCHEDULE_SYSTEM_HALT,
+	SCHEDULE_SYSTEM_REBOOT,
+	SCHEDULE_SYSTEM_SLEEP
 };
 
 struct scheduler_activity {

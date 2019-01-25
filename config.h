@@ -11,7 +11,8 @@ static const char *configurationdirs[] CYBERD_UNUSED = {
 
 #define CYBERD_CONNECTIONS_LIMIT 64
 
-#define CYBERCTL_IPC_PATH "./test/ipc"
+#define CYBERCTLS_DIRECTORY "./test"
+#define INITCTL_PATH CYBERCTLS_DIRECTORY"/initctl"
 
 /* CONFIG_H */
 #endif
