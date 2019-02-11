@@ -1,5 +1,4 @@
 #include "configuration.h"
-#include "daemon.h"
 #include "log.h"
 #include "tree.h"
 
@@ -169,5 +168,11 @@ configuration_reload(void) {
 	daemons_dir_iterate(daemons_reload);
 	daemons_preorder_cleanup(reloadtmp.root);
 	tree_deinit(&reloadtmp);
+}
+
+struct daemon *
+configuration_daemon_find(hash_t namehash) {
+
+	return tree_find(&daemons, namehash);
 }
 

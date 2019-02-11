@@ -11,8 +11,8 @@
 #include <time.h> /* nanosleep */
 #include <errno.h>
 
-#ifndef CYBERD_NORETURN
-#define CYBERD_NORETURN __attribute__((noreturn))
+#ifndef NORETURN
+#define NORETURN __attribute__((noreturn))
 #endif
 
 /**
@@ -26,7 +26,7 @@ bool running;
  * Note some structures (scheduler) are not freed, because
  * they do not hold sensible system ressources, such as locks, files..
  */
-static void CYBERD_NORETURN
+static void NORETURN
 end(void) {
 	struct timespec req = {
 		.tv_sec = 5,
