@@ -2,7 +2,7 @@
 
 #include <string.h>
 
-/* Should implement a SipHash, FNV hash will do temporarily */
+/* Should implement a better one, FNV hash will do temporarily */
 
 #define FNV_OFFSET_BASIS	0xCBF29CE484222325	
 #define FNV_PRIME		0x100000001B3
@@ -19,6 +19,21 @@ hash_string(const char *string) {
 
 		ptr += 1;
 	}
+
+	return hash;
+}
+
+hash_t
+hash_start(void) {
+
+	return FNV_OFFSET_BASIS;
+}
+
+hash_t
+hash_run(hash_t hash, char c) {
+
+	hash *= FNV_PRIME;
+	hash ^= c;
 
 	return hash;
 }
