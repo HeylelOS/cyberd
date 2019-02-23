@@ -1,5 +1,7 @@
 #include "control.h"
 
+#include "../log.h"
+
 #include <stdlib.h>
 #include <ctype.h> /* isdigit */
 
@@ -24,62 +26,109 @@ control_destroy(struct control *control) {
 	free(control);
 }
 
+static inline void
+control_state_end(struct control *control, char c) {
+
+	control->state = CONTROL_STATE_COMMAND_DETERMINATION;
+	control->command = COMMAND_READER_START;
+}
+
+static inline void
+control_state_command_determination(struct control *control, char c) {
+
+	if(c == ' ') {
+		if(control->command == COMMAND_CREATE_CONTROLLER) {
+			control->state = CONTROL_STATE_CCTL_REMOVING_COMMANDS;
+			control->cctl.permsmask = 0;
+			control->cctl.removing = COMMAND_READER_START;
+		} else if(COMMAND_IS_DAEMON(control->command)
+			|| COMMAND_IS_SYSTEM(control->command)) {
+			control->state = CONTROL_STATE_TIME;
+			control->planified.when = 0;
+		} else {
+			control->state = CONTROL_STATE_DISCARDING;
+		}
+	} else if((control->command = command_reader_next(control->command, c))
+		== COMMAND_READER_DISCARDING) {
+		control->state = CONTROL_STATE_DISCARDING;
+	}
+}
+
+static inline void
+control_state_time(struct control *control, char c) {
+
+	if(!isdigit(c)
+		|| (control->planified.when *= 10) < 0
+		|| (control->planified.when += c - '0') < 0) {
+		if(c == ' ' && COMMAND_IS_DAEMON(control->command)) {
+			control->state = CONTROL_STATE_DAEMON_NAME;
+			control->planified.daemonhash = hash_start();
+		} else if(c == '\0' && COMMAND_IS_SYSTEM(control->command)) {
+			control->state = CONTROL_STATE_END;
+		} else {
+			control->state = CONTROL_STATE_DISCARDING;
+		}
+	}
+}
+
+static inline void
+control_state_cctl_removing_commands(struct control *control, char c) {
+
+	control->state = CONTROL_STATE_DISCARDING;
+}
+
+static inline void
+control_state_cctl_name(struct control *control, char c) {
+
+	control->state = CONTROL_STATE_DISCARDING;
+}
+
+static inline void
+control_state_daemon_name(struct control *control, char c) {
+
+	if(c == '\0') {
+		control->state = CONTROL_STATE_END;
+	} else if(c == '/') {
+		control->state = CONTROL_STATE_DISCARDING;
+	} else {
+		control->planified.daemonhash
+			= hash_update(control->planified.daemonhash, c);
+	}
+}
+
 bool
-control_run(struct control *control, char c) {
+control_update(struct control *control, char c) {
 
 	switch(control->state) {
 	case CONTROL_STATE_END:
-		control->state = CONTROL_STATE_COMMAND_DETERMINATION;
-		control->command = COMMAND_READER_START;
+		log_print("Control-state-end\n");
+		control_state_end(control, c);
 		/* fallthrough */
 	case CONTROL_STATE_COMMAND_DETERMINATION:
-		if(c == ' ') {
-			if(control->command == COMMAND_CREATE_CONTROLLER) {
-				control->state = CONTROL_STATE_CCTL_REMOVING_COMMANDS;
-				control->cctl.permsmask = 0;
-				control->cctl.removing = COMMAND_READER_START;
-			} else if(COMMAND_IS_DAEMON(control->command)
-				|| COMMAND_IS_SYSTEM(control->command)) {
-				control->state = CONTROL_STATE_TIME;
-				control->planified.when = 0;
-			} else {
-				control->state = CONTROL_STATE_DISCARDING;
-			}
-		} else if((control->command = command_reader_next(control->command, c))
-			== COMMAND_READER_DISCARDING) {
-			control->state = CONTROL_STATE_DISCARDING;
-		} break;
+		log_print("Control-state-command-determination\n");
+		control_state_command_determination(control, c);
+		break;
 	case CONTROL_STATE_TIME:
-		if(!isdigit(c)
-			|| (control->planified.when *= 10) < 0
-			|| (control->planified.when += c - '0') < 0) {
-			if(c == ' ' && COMMAND_IS_DAEMON(control->command)) {
-				control->state = CONTROL_STATE_DAEMON_NAME;
-				control->planified.daemonhash = hash_start();
-			} else if(c == '\0' && COMMAND_IS_SYSTEM(control->command)) {
-				control->state = CONTROL_STATE_END;
-			} else {
-				control->state = CONTROL_STATE_DISCARDING;
-			}
-		} break;
+		log_print("Control-state-time\n");
+		control_state_time(control, c);
+		break;
 	case CONTROL_STATE_CCTL_REMOVING_COMMANDS:
-		control->state = CONTROL_STATE_DISCARDING;
+		log_print("Control-state-cctl-removing-commands\n");
+		control_state_cctl_removing_commands(control, c);
 		break;
 	case CONTROL_STATE_CCTL_NAME:
-		control->state = CONTROL_STATE_DISCARDING;
+		log_print("Control-state-cctl-name\n");
+		control_state_cctl_name(control, c);
 		break;
 	case CONTROL_STATE_DAEMON_NAME:
-		if(c == '\0') {
-			control->state = CONTROL_STATE_END;
-		} else if(c == '/') {
-			control->state = CONTROL_STATE_DISCARDING;
-		} else {
-			control->planified.daemonhash
-				= hash_run(control->planified.daemonhash, c);
-		}
+		log_print("Control-state-daemon-name\n");
+		control_state_daemon_name(control, c);
+		break;
 	default: /* CONTROL_STATE_DISCARDING */
+		log_print("Control-state-discarding\n");
 		if(c == '\0') {
 			control->state = CONTROL_STATE_END;
+			control->command = COMMAND_UNDEFINED;
 		} break;
 	}
 

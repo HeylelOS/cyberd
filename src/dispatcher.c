@@ -91,8 +91,11 @@ dispatcher_preorder_cleanup(struct tree_node *node) {
 void
 dispatcher_deinit(void) {
 
-	/* free(dispatcher.sets); */
 	dispatcher_preorder_cleanup(dispatcher.fds.root);
+#ifdef CONFIG_FULL_MEMORY_CLEANUP
+	tree_deinit(&dispatcher.fds);
+	free(dispatcher.sets);
+#endif
 }
 
 int
@@ -122,69 +125,70 @@ dispatcher_readset(void) {
 
 static void
 dispatcher_handle_acceptor(struct fde *acceptor) {
-	struct fde *connection
+	struct fde *controller
 		= fde_create_controller(acceptor);
 
-	if(connection != NULL) {
-		dispatcher_insert(connection);
+	log_print("Handling acceptor\n");
+	if(controller != NULL) {
+		dispatcher_insert(controller);
 	}
 }
 
 static void
-dispatcher_handle_connection(struct fde *connection) {
+dispatcher_handle_controller(struct fde *controller) {
 	char buffer[CONFIG_READ_BUFFER_SIZE];
 	ssize_t readval;
 
-	if((readval = read(connection->fd, buffer, sizeof(buffer))) > 0) {
+	log_print("Handling controller\n");
+	if((readval = read(controller->fd, buffer, sizeof(buffer))) > 0) {
 		const char *current = buffer;
 		const char * const end = current + readval;
 
 		while(current < end) {
-			/*
-			if(control_run(&connection->ctl, *current)
-				&& connection->ctl.command != COMMAND_UNDEFINED) {
-				if(connection->ctl.command == COMMAND_CREATE_CONTROL) {
-					/ We can safely assume sizeof(CONFIG_CONTROLLERS_DIRECTORY) < MAXPATHLEN /
+			struct control *control = controller->control;
+			if(control_update(control, *current)
+				&& COMMAND_IS_VALID(control->command)) {
+				if(control->command == COMMAND_CREATE_CONTROLLER) {
+					/* We can safely assume sizeof(CONFIG_CONTROLLERS_DIRECTORY) < MAXPATHLEN */
 					char path[MAXPATHLEN];
 					char *name = stpncpy(path, CONFIG_CONTROLLERS_DIRECTORY,
 						sizeof(CONFIG_CONTROLLERS_DIRECTORY));
 					*name = '/';
-					strncpy((name += 1), connection->ctl.cctl.name,
+					strncpy((name += 1), control->cctl.name.value,
 						MAXPATHLEN - sizeof(CONFIG_CONTROLLERS_DIRECTORY) - 1);
 					path[MAXPATHLEN - 1] = '\0';
 					struct fde *acceptor
 						= fde_create_acceptor(path,
-							connection->ctl.perms
-							^ connection->ctl.cctl.permsmask);
+							controller->perms
+							^ control->cctl.permsmask);
 
 					if(acceptor != NULL) {
 						dispatcher_insert(acceptor);
 					} else {
-						log_print("dispatcher_init: Unable to create '%s' acceptor\n",
-							connection->ctl.cctl.name);
+						log_print("dispatcher_handle_controller: Unable to create '%s' acceptor\n",
+							control->cctl.name.value);
 					}
 				} else {
 					struct scheduler_activity activity = {
-						.action = connection->ctl.command
+						.when = control->planified.when,
+						.action = (int)control->command
 					};
 
-					if(connection->ctl.command <= COMMAND_DAEMON_END) {
-						activity.daemon
-							= configuration_daemon_find(connection->ctl.daemon.namehash);
-						activity.when = connection->ctl.daemon.when;
+					if(COMMAND_IS_SYSTEM(control->command)
+						|| (COMMAND_IS_DAEMON(control->command) 
+							&& (activity.daemon = configuration_daemon_find(control->planified.daemonhash)) != NULL)) {
+						scheduler_schedule(&activity);
 					} else {
-						activity.when = connection->ctl.system.when;
+						log_print("dispatcher_handle_controller: Unable to find daemon\n");
 					}
-
-					scheduler_schedule(&activity);
 				}
 			}
-			*/
+
 			current += 1;
 		}
 	} else if(readval == 0) {
-		dispatcher_remove(connection);
-		fde_destroy(connection);
+		dispatcher_remove(controller);
+		fde_destroy(controller);
 	}
 }
 
@@ -203,7 +207,7 @@ dispatcher_handle(unsigned int fds) {
 			if(fde->type == FDE_TYPE_ACCEPTOR) {
 				dispatcher_handle_acceptor(fde);
 			} else {
-				dispatcher_handle_connection(fde);
+				dispatcher_handle_controller(fde);
 			}
 		}
 	}

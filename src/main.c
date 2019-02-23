@@ -5,6 +5,8 @@
 #include "signals.h"
 #include "log.h"
 
+#include "../config.h"
+
 #include <stdlib.h>
 #include <stdbool.h>
 #include <unistd.h> /* sync */
@@ -22,6 +24,16 @@
 bool running;
 
 /**
+ * The ending enum specifies what to do when we end.
+ * Should we halt, reboot, or sleep?
+ */
+static enum {
+	ENDING_HALT = 0,
+	ENDING_REBOOT = 1,
+	ENDING_SLEEP = 2
+} ending;
+
+/**
  * Ending init, lot of cleanup, the daemons timeout is 5 seconds,
  * Note some structures (scheduler) are not freed, because
  * they do not hold sensible system ressources, such as locks, files..
@@ -33,7 +45,7 @@ end(void) {
 		.tv_nsec = 0
 	}, rem;
 
-	log_print("Ending...");
+	log_print("Ending...\n");
 
 	/* Notify spawns they should stop */
 	spawns_stop();
@@ -56,6 +68,10 @@ end(void) {
 		signals_ending();
 		spawns_end();
 	}
+
+#ifdef CONFIG_FULL_MEMORY_CLEANUP
+	configuration_deinit();
+#endif
 
 	/* log ending */
 	log_deinit();
@@ -120,6 +136,21 @@ main(int argc,
 				break;
 			case SCHEDULE_DAEMON_RELOAD:
 				daemon_reload(activity.daemon);
+				break;
+			case SCHEDULE_DAEMON_END:
+				daemon_end(activity.daemon);
+				break;
+			case SCHEDULE_SYSTEM_HALT:
+				ending = ENDING_HALT;
+				running = false;
+				break;
+			case SCHEDULE_SYSTEM_REBOOT:
+				ending = ENDING_REBOOT;
+				running = false;
+				break;
+			case SCHEDULE_SYSTEM_SLEEP:
+				ending = ENDING_SLEEP;
+				running = false;
 				break;
 			default:
 				log_print("Unknown scheduled action received\n");
