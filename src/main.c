@@ -28,9 +28,10 @@ bool running;
  * Should we halt, reboot, or sleep?
  */
 static enum {
-	ENDING_HALT = 0,
-	ENDING_REBOOT = 1,
-	ENDING_SLEEP = 2
+	ENDING_POWEROFF = 0,
+	ENDING_HALT = 1,
+	ENDING_REBOOT = 2,
+	ENDING_SUSPEND = 3
 } ending;
 
 /**
@@ -83,7 +84,7 @@ end(void) {
 
 int
 main(int argc,
-	char **argv) {
+	const char **argv) {
 	/* Environnement initialization, order matters */
 	log_init();
 	signals_init();
@@ -137,21 +138,13 @@ main(int argc,
 			case SCHEDULE_DAEMON_END:
 				daemon_end(activity.daemon);
 				break;
-			case SCHEDULE_SYSTEM_HALT:
-				ending = ENDING_HALT;
-				running = false;
-				break;
-			case SCHEDULE_SYSTEM_REBOOT:
-				ending = ENDING_REBOOT;
-				running = false;
-				break;
-			case SCHEDULE_SYSTEM_SLEEP:
-				ending = ENDING_SLEEP;
-				running = false;
-				break;
 			default:
-				log_print("Unknown scheduled action received\n");
-				break;
+				if (COMMAND_IS_SYSTEM(activity.action)) {
+					ending = activity.action - SCHEDULE_SYSTEM_POWEROFF;
+					running = false;
+				} else {
+					log_print("Unknown scheduled action received\n");
+				} break;
 			}
 		} else if (errno != EINTR) {
 			/* Error, signal not considered */
