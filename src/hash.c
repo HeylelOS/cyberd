@@ -30,7 +30,7 @@ hash_start(void) {
 }
 
 hash_t
-hash_run(hash_t hash, char c) {
+hash_update(hash_t hash, char c) {
 
 	hash *= FNV_PRIME;
 	hash ^= c;

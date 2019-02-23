@@ -2,6 +2,7 @@
 #define CONFIGURATION_H
 
 #include "daemon.h"
+#include "../config.h"
 
 /**
  * Initializes data structures, load daemons
@@ -10,6 +11,11 @@
  */
 void
 configuration_init(void);
+
+#ifdef CONFIG_FULL_MEMORY_CLEANUP
+void
+configuration_deinit(void);
+#endif
 
 /**
  * Re-read daemons, add new ones, reconfigure previous
