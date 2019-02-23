@@ -146,7 +146,8 @@ dispatcher_handle_controller(struct fde *controller) {
 
 		while (current < end) {
 			struct control *control = controller->control;
-			if (control_update(control, *current) && COMMAND_IS_VALID(control->command)) {
+			if (control_update(control, *current) && COMMAND_IS_VALID(control->command)
+				&& ((controller->perms | (1 << control->command)) == controller->perms)) {
 				if (control->command == COMMAND_CREATE_CONTROLLER) {
 					/* We can safely assume sizeof (CONFIG_CONTROLLERS_DIRECTORY) < MAXPATHLEN */
 					char path[MAXPATHLEN];

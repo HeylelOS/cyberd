@@ -23,6 +23,7 @@ Separation is done by only one whitespace.
 
 <daemon name> and <acceptor name> refer to filenames
 not beginning with a '.', so not composed by any NUL nor '/'.
+Note this is the only field not mandatorily ASCII-coded.
 The filename max size also applies.
 
 ## Daemons related commands
@@ -34,9 +35,10 @@ dend <when> <daemon name> : Schedule end of a daemon
 
 ## System related commands
 
+spwf <when> : Power off system
 shlt <when> : Halt system
 srbt <when> : Reboot system
-sslp <when> : Put system to sleep
+sssp <when> : Suspend system
 
 ## Miscellaneous commands
 
