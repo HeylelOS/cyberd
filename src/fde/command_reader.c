@@ -47,12 +47,22 @@ command_reader_next(enum command_reader current, char c) {
 			return COMMAND_READER_DAEMON_END;
 		} break;
 	case COMMAND_READER_S:
-		if(c == 'h') {
+		if(c == 'p') {
+			return COMMAND_READER_SP;
+		} else if(c == 'h') {
 			return COMMAND_READER_SH;
 		} else if(c == 'r') {
 			return COMMAND_READER_SR;
 		} else if(c == 's') {
 			return COMMAND_READER_SS;
+		} break;
+	case COMMAND_READER_SP:
+		if(c == 'w') {
+			return COMMAND_READER_SPW;
+		} break;
+	case COMMAND_READER_SPW:
+		if(c == 'f') {
+			return COMMAND_READER_SYSTEM_POWEROFF;
 		} break;
 	case COMMAND_READER_SH:
 		if(c == 'l') {
@@ -71,12 +81,12 @@ command_reader_next(enum command_reader current, char c) {
 			return COMMAND_READER_SYSTEM_REBOOT;
 		} break;
 	case COMMAND_READER_SS:
-		if(c == 'l') {
-			return COMMAND_READER_SSL;
+		if(c == 's') {
+			return COMMAND_READER_SSS;
 		} break;
-	case COMMAND_READER_SSL:
+	case COMMAND_READER_SSS:
 		if(c == 'p') {
-			return COMMAND_READER_SYSTEM_SLEEP;
+			return COMMAND_READER_SYSTEM_SUSPEND;
 		} break;
 	case COMMAND_READER_C:
 		if(c == 'c') {
