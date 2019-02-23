@@ -1,9 +1,9 @@
 #include "configuration.h"
 #include "log.h"
 #include "tree.h"
-
 #include "scheduler.h"
-#include "../config.h" /* configurationdirs */
+
+#include "../config.h"
 
 #include <stdio.h>
 #include <sys/param.h>
@@ -105,10 +105,32 @@ daemons_load(const struct dirent *entry,
 void
 configuration_init(void) {
 
-	log_print("Configurating...");
+	log_print("Configurating...\n");
 	tree_init(&daemons, daemons_hash_field);
 	daemons_dir_iterate(daemons_load);
 }
+
+static void
+daemons_preorder_cleanup(struct tree_node *node) {
+
+	if (node != NULL) {
+		struct daemon *daemon = node->element;
+
+		daemon_destroy(daemon);
+
+		daemons_preorder_cleanup(node->left);
+		daemons_preorder_cleanup(node->right);
+	}
+}
+
+#ifdef CONFIG_FULL_MEMORY_CLEANUP
+void
+configuration_deinit(void) {
+
+	daemons_preorder_cleanup(daemons.root);
+	tree_deinit(&daemons);
+}
+#endif
 
 static void
 daemons_reload(const struct dirent *entry,
@@ -141,19 +163,6 @@ daemons_reload(const struct dirent *entry,
 			daemon_destroy(daemon);
 			tree_node_destroy(node);
 		}
-	}
-}
-
-static void
-daemons_preorder_cleanup(struct tree_node *node) {
-
-	if (node != NULL) {
-		struct daemon *daemon = node->element;
-
-		daemon_destroy(daemon);
-
-		daemons_preorder_cleanup(node->left);
-		daemons_preorder_cleanup(node->right);
 	}
 }
 
