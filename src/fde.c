@@ -14,41 +14,45 @@
 
 struct fde *
 fde_create_acceptor(const char *path, perms_t perms) {
-	struct fde *fde = NULL;
 	int fd = socket(AF_LOCAL, SOCK_STREAM, 0);
 
-	if (fd != -1) {
-		struct sockaddr_un addr;
-		char * const end = stpncpy(addr.sun_path, path, SOCKADDR_UN_MAXLEN);
-
-		if (end < addr.sun_path + SOCKADDR_UN_MAXLEN) {
-			addr.sun_family = AF_LOCAL;
-
-			if (bind(fd, (const struct sockaddr *)&addr, sizeof (addr)) == 0) {
-				if (listen(fd, CONFIG_CONNECTIONS_LIMIT) == 0) {
-					fde = malloc(sizeof (*fde));
-
-					fde->fd = fd;
-					fde->type = FDE_TYPE_ACCEPTOR;
-					fde->perms = perms;
-					fde->control = NULL;
-
-					log_print("Created acceptor %d\n", fde->fd);
-				} else {
-					log_error("fde_create_acceptor listen");
-				}
-			} else {
-				log_error("fde_create_acceptor bind");
-			}
-		} else {
-			errno = EOVERFLOW;
-			log_error("fde_create_acceptor");
-		}
-	} else {
+	if (fd == -1) {
 		log_error("fde_create_acceptor socket");
+		goto fde_create_acceptor_err0;
 	}
 
+	struct sockaddr_un addr = { .sun_family = AF_LOCAL };
+	char * const end = stpncpy(addr.sun_path, path, SOCKADDR_UN_MAXLEN);
+
+	if (end >= addr.sun_path + SOCKADDR_UN_MAXLEN) {
+		errno = EOVERFLOW;
+		log_error("fde_create_acceptor");
+		goto fde_create_acceptor_err1;
+	}
+
+	if (bind(fd, (const struct sockaddr *)&addr, sizeof (addr)) != 0) {
+		log_error("fde_create_acceptor bind");
+		goto fde_create_acceptor_err1;
+	}
+
+	if (listen(fd, CONFIG_CONNECTIONS_LIMIT) != 0) {
+		log_error("fde_create_acceptor listen");
+		goto fde_create_acceptor_err2;
+	}
+
+	struct fde *fde = malloc(sizeof (*fde));
+	fde->fd = fd;
+	fde->type = FDE_TYPE_ACCEPTOR;
+	fde->perms = perms;
+	fde->control = NULL;
+
 	return fde;
+fde_create_acceptor_err2:
+	unlink(path);
+fde_create_acceptor_err1:
+	close(fd);
+fde_create_acceptor_err0:
+	return NULL;
 }
 
 struct fde *
@@ -65,7 +69,6 @@ fde_create_controller(const struct fde *acceptor) {
 		fde->type = FDE_TYPE_CONTROLLER;
 		fde->perms = acceptor->perms;
 		fde->control = control_create();
-		log_print("Created controller %d\n", fde->fd);
 	} else {
 		log_error("fde_create_controller accept");
 	}
@@ -85,11 +88,8 @@ fde_destroy(struct fde *fde) {
 			&len) == 0) {
 			unlink(addr.sun_path);
 		}
-
-		log_print("Destroyed acceptor %d\n", fde->fd);
 	} else {
 		control_destroy(fde->control);
-		log_print("Destroyed controller %d\n", fde->fd);
 	}
 
 	close(fde->fd);

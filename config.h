@@ -10,6 +10,7 @@ static const char *configurationdirs[] UNUSED = {
 };
 
 #define CONFIG_CONNECTIONS_LIMIT 64
+#define CONFIG_MAX_ACCEPTOR_LEN 255
 
 #define CONFIG_CONTROLLERS_DIRECTORY "./test"
 #define CONFIG_INITCTL_PATH CONFIG_CONTROLLERS_DIRECTORY"/initctl"

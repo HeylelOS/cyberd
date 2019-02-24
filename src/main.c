@@ -68,6 +68,7 @@ end(void) {
 	}
 
 #ifdef CONFIG_FULL_CLEANUP
+	scheduler_deinit();
 	configuration_deinit();
 #endif
 

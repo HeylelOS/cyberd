@@ -128,7 +128,6 @@ dispatcher_handle_acceptor(struct fde *acceptor) {
 	struct fde *controller
 		= fde_create_controller(acceptor);
 
-	log_print("Handling acceptor\n");
 	if (controller != NULL) {
 		dispatcher_insert(controller);
 	}
@@ -139,7 +138,6 @@ dispatcher_handle_controller(struct fde *controller) {
 	char buffer[CONFIG_READ_BUFFER_SIZE];
 	ssize_t readval;
 
-	log_print("Handling controller\n");
 	if ((readval = read(controller->fd, buffer, sizeof (buffer))) > 0) {
 		const char *current = buffer;
 		const char * const end = current + readval;
@@ -160,7 +158,7 @@ dispatcher_handle_controller(struct fde *controller) {
 					struct fde *acceptor
 						= fde_create_acceptor(path,
 							controller->perms
-							^ control->cctl.permsmask);
+							& ~control->cctl.permsmask);
 
 					if (acceptor != NULL) {
 						dispatcher_insert(acceptor);

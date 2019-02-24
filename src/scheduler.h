@@ -4,6 +4,8 @@
 #include "commands.h"
 #include "daemon.h"
 
+#include "../config.h"
+
 #include <sys/types.h>
 #include <sys/time.h>
 
@@ -42,6 +44,11 @@ struct scheduler_activity {
 
 void
 scheduler_init(void);
+
+#ifdef CONFIG_FULL_CLEANUP
+void
+scheduler_deinit(void);
+#endif
 
 const struct timespec *
 scheduler_next(void);

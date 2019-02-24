@@ -1,5 +1,7 @@
 #include "scheduler.h"
 
+#include "../config.h"
+
 #include <stdlib.h>
 #include <stdbool.h>
 #include <time.h>
@@ -91,6 +93,14 @@ scheduler_init(void) {
 	scheduler.alloc = 0;
 	scheduler.scheduling = NULL;
 }
+
+#ifdef CONFIG_FULL_CLEANUP
+void
+scheduler_deinit(void) {
+
+	free(scheduler.scheduling);
+}
+#endif
 
 const struct timespec *
 scheduler_next(void) {
