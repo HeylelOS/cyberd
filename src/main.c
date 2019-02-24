@@ -67,7 +67,7 @@ end(void) {
 		spawns_end();
 	}
 
-#ifdef CONFIG_FULL_MEMORY_CLEANUP
+#ifdef CONFIG_FULL_CLEANUP
 	configuration_deinit();
 #endif
 

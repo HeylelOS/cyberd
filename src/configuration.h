@@ -12,7 +12,7 @@
 void
 configuration_init(void);
 
-#ifdef CONFIG_FULL_MEMORY_CLEANUP
+#ifdef CONFIG_FULL_CLEANUP
 void
 configuration_deinit(void);
 #endif

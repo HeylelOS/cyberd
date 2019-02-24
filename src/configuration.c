@@ -123,7 +123,7 @@ daemons_preorder_cleanup(struct tree_node *node) {
 	}
 }
 
-#ifdef CONFIG_FULL_MEMORY_CLEANUP
+#ifdef CONFIG_FULL_CLEANUP
 void
 configuration_deinit(void) {
 

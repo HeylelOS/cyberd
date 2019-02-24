@@ -6,7 +6,6 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include <alloca.h>
 #include <errno.h>
 
 #include "../config.h"
@@ -95,7 +94,7 @@ cyberctl_daemon(int fd,
 	size_t whenlen,
 	const char *daemonname) {
 	size_t buffersize = 7 + whenlen + strlen(daemonname);
-	char *buffer = alloca(buffersize);
+	char buffer[buffersize];
 
 	snprintf(buffer, buffersize, "%.4s %s %s", command, when, daemonname);
 	write(fd, buffer, buffersize);
@@ -107,7 +106,7 @@ cyberctl_system(int fd,
 	const char *when,
 	size_t whenlen) {
 	size_t buffersize = 6 + whenlen;
-	char *buffer = alloca(buffersize);
+	char buffer[buffersize];
 
 	snprintf(buffer, buffersize, "%.4s %s", command, when);
 	write(fd, buffer, buffersize);
@@ -119,7 +118,7 @@ cyberctl_cctl(int fd,
 	const char **end,
 	const char *name) {
 	size_t buffersize = 6 + (end - restricted) * 5 + strlen(name);
-	char *buffer = alloca(buffersize);
+	char buffer[buffersize];
 	char *current = stpncpy(buffer, "cctl ", 5);
 
 	while (restricted != end) {
@@ -134,11 +133,12 @@ cyberctl_cctl(int fd,
 		}
 
 		current = stpncpy(current, command, 4);
-		*++current = ' ';
+		*current++ = ' ';
 
 		restricted += 1;
 	}
-	*current = '\0';
+
+	strncpy(current, name, buffer + buffersize - current);
 
 	write(fd, buffer, buffersize);
 }
@@ -167,12 +167,14 @@ main(int argc,
 	}
 
 	const char *when = "0";
-	const char *whenend = when + 1;
+	const char *whenend;
 	if (strcmp("-t", *argpos) == 0
 		&& argpos + 2 < argend
-		&& cyberctl_is_integral(when, &whenend)) {
+		&& cyberctl_is_integral(argpos[1], &whenend)) {
 		when = argpos[1];
 		argpos += 2;
+	} else {
+		whenend = when + 1;
 	}
 
 	int fd = cyberctl_open(CONFIG_INITCTL_PATH);
@@ -182,14 +184,16 @@ main(int argc,
 	if ((command = cyberctl_command_daemon(*argpos)) != NULL) {
 		argpos += 1;
 
-		while (argpos != argend) {
+		while (argpos < argend) {
 			cyberctl_daemon(fd, command, when, whenlen, *argpos);
 			argpos += 1;
 		}
-	} else if ((command = cyberctl_command_system(*argpos)) != NULL) {
+	} else if (argend - argpos == 1
+		&&(command = cyberctl_command_system(*argpos)) != NULL) {
 
 		cyberctl_system(fd, command, when, whenlen);
-	} else if (argpos == argv + 1 && strcmp("cctl", *argpos) == 0) {
+	} else if (argpos == argv + 1
+		&& strcmp("cctl", *argpos) == 0) {
 		argpos += 1;
 
 		cyberctl_cctl(fd, argpos + 1, argend, *argpos);
