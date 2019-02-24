@@ -92,7 +92,7 @@ void
 dispatcher_deinit(void) {
 
 	dispatcher_preorder_cleanup(dispatcher.fds.root);
-#ifdef CONFIG_FULL_MEMORY_CLEANUP
+#ifdef CONFIG_FULL_CLEANUP
 	tree_deinit(&dispatcher.fds);
 	free(dispatcher.sets);
 #endif

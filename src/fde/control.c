@@ -99,6 +99,12 @@ control_state_daemon_name(struct control *control, char c) {
 bool
 control_update(struct control *control, char c) {
 
+	if (isgraph(c) || isblank(c)) {
+		log_print("On character: '%c': ", c);
+	} else {
+		log_print("On character: %d: ", (int)c);
+	}
+
 	switch (control->state) {
 	case CONTROL_STATE_END:
 		log_print("Control-state-end\n");
