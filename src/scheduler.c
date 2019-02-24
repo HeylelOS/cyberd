@@ -10,34 +10,84 @@
 #define HEAP_INDEX_CHILD_LEFT(index)	(2 * (index) + 1)
 #define HEAP_INDEX_CHILD_RIGHT(index)	(2 * (index) + 2)
 
-struct {
-	size_t n, alloc;
-	struct scheduler_activity *scheduling;
+static struct {
+	size_t n, capacity;
+	struct scheduler_activity *schedule;
 } scheduler;
+
+void
+scheduler_init(void) {
+
+	scheduler.n = 0;
+	scheduler.capacity = 0;
+	scheduler.schedule = NULL;
+}
+
+#ifdef CONFIG_FULL_CLEANUP
+void
+scheduler_deinit(void) {
+
+	free(scheduler.schedule);
+}
+#endif
+
+const struct timespec *
+scheduler_next(void) {
+
+	if (scheduler.n != 0) {
+		static struct timespec timeout;
+		time_t when = scheduler.schedule[0].when;
+
+		clock_gettime(CLOCK_REALTIME, &timeout);
+
+		if (timeout.tv_nsec > 0) {
+			when -= 1;
+			timeout.tv_nsec = 1000000000 - timeout.tv_nsec;
+		} else {
+			timeout.tv_nsec = 0;
+		}
+
+		if (when >= timeout.tv_sec) {
+			timeout.tv_sec = when - timeout.tv_sec;
+		} else {
+			timeout.tv_sec = 0;
+			timeout.tv_nsec = 0;
+		}
+
+		return &timeout;
+	} else {
+		return NULL;
+	}
+}
+
+void
+scheduler_empty(void) {
+
+	scheduler.n = 0;
+}
 
 static inline void
 scheduler_expand(void) {
 
-	scheduler.alloc += 64;
-	scheduler.scheduling = realloc(scheduler.scheduling,
-		sizeof (*scheduler.scheduling) * scheduler.alloc);
+	scheduler.capacity += 64;
+	scheduler.schedule = realloc(scheduler.schedule, sizeof (*scheduler.schedule) * scheduler.capacity);
 }
 
 static inline bool
 scheduler_prior(size_t index1,
 	size_t index2) {
 
-	return scheduler.scheduling[index1].when
-		< scheduler.scheduling[index2].when;
+	return scheduler.schedule[index1].when
+		< scheduler.schedule[index2].when;
 }
 
 static inline void
 scheduler_swap(size_t index1,
 	size_t index2) {
-	struct scheduler_activity swap = scheduler.scheduling[index1];
+	struct scheduler_activity swap = scheduler.schedule[index1];
 
-	scheduler.scheduling[index1] = scheduler.scheduling[index2];
-	scheduler.scheduling[index2] = swap;
+	scheduler.schedule[index1] = scheduler.schedule[index2];
+	scheduler.schedule[index2] = swap;
 }
 
 static void
@@ -87,64 +137,13 @@ scheduler_sift_down(size_t index) {
 }
 
 void
-scheduler_init(void) {
-
-	scheduler.n = 0;
-	scheduler.alloc = 0;
-	scheduler.scheduling = NULL;
-}
-
-#ifdef CONFIG_FULL_CLEANUP
-void
-scheduler_deinit(void) {
-
-	free(scheduler.scheduling);
-}
-#endif
-
-const struct timespec *
-scheduler_next(void) {
-
-	if (scheduler.n != 0) {
-		static struct timespec timeout;
-		time_t when = scheduler.scheduling[0].when;
-
-		clock_gettime(CLOCK_REALTIME, &timeout);
-
-		if (timeout.tv_nsec > 0) {
-			when -= 1;
-			timeout.tv_nsec = 1000000000 - timeout.tv_nsec;
-		} else {
-			timeout.tv_nsec = 0;
-		}
-
-		if (when >= timeout.tv_sec) {
-			timeout.tv_sec = when - timeout.tv_sec;
-		} else {
-			timeout.tv_sec = 0;
-			timeout.tv_nsec = 0;
-		}
-
-		return &timeout;
-	} else {
-		return NULL;
-	}
-}
-
-void
-scheduler_empty(void) {
-
-	scheduler.n = 0;
-}
-
-void
 scheduler_schedule(const struct scheduler_activity *activity) {
 
-	if (scheduler.n == scheduler.alloc) {
+	if (scheduler.n == scheduler.capacity) {
 		scheduler_expand();
 	}
 
-	scheduler.scheduling[scheduler.n] = *activity;
+	scheduler.schedule[scheduler.n] = *activity;
 	scheduler.n += 1;
 
 	scheduler_sift_up(scheduler.n - 1);
@@ -157,9 +156,9 @@ scheduler_schedule(const struct scheduler_activity *activity) {
 void
 scheduler_dequeue(struct scheduler_activity *activity) {
 
-	*activity = scheduler.scheduling[0];
+	*activity = scheduler.schedule[0];
 	scheduler.n -= 1;
-	scheduler.scheduling[0] = scheduler.scheduling[scheduler.n];
+	scheduler.schedule[0] = scheduler.schedule[scheduler.n];
 
 	scheduler_sift_down(0);
 }

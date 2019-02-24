@@ -19,9 +19,9 @@
  * - scheduler_init is useless,
  *   because global vars are zeroe'd but
  *   still here for code clarity.
- * - scheduler_destroy not available because
- *   the kernel cleans up memory better
- *   than userspace.
+ * - scheduler_deinit not available
+ *   by default because the kernel cleans
+ *   up memory better than userspace.
  */
 
 enum scheduler_action {
