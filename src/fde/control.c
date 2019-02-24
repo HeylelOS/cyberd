@@ -143,39 +143,26 @@ control_state_daemon_name(struct control *control, char c) {
 bool
 control_update(struct control *control, char c) {
 
-	if(isgraph(c) || isblank(c)) {
-		log_print("On character: '%c': ", c);
-	} else {
-		log_print("On character: %d: ", (int)c);
-	}
-
 	switch(control->state) {
 	case CONTROL_STATE_END:
-		log_print("Control-state-end\n");
 		control_state_end(control, c);
 		/* fallthrough */
 	case CONTROL_STATE_COMMAND_DETERMINATION:
-		log_print("Control-state-command-determination\n");
 		control_state_command_determination(control, c);
 		break;
 	case CONTROL_STATE_TIME:
-		log_print("Control-state-time\n");
 		control_state_time(control, c);
 		break;
 	case CONTROL_STATE_CCTL_REMOVING_COMMANDS:
-		log_print("Control-state-cctl-removing-commands\n");
 		control_state_cctl_removing_commands(control, c);
 		break;
 	case CONTROL_STATE_CCTL_NAME:
-		log_print("Control-state-cctl-name\n");
 		control_state_cctl_name(control, c);
 		break;
 	case CONTROL_STATE_DAEMON_NAME:
-		log_print("Control-state-daemon-name\n");
 		control_state_daemon_name(control, c);
 		break;
 	default: /* CONTROL_STATE_DISCARDING */
-		log_print("Control-state-discarding\n");
 		if(c == '\0') {
 			control->state = CONTROL_STATE_END;
 			control->command = COMMAND_UNDEFINED;

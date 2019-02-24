@@ -46,8 +46,6 @@ fde_create_acceptor(const char *path, perms_t perms) {
 	fde->perms = perms;
 	fde->control = NULL;
 
-	log_print("Created acceptor %d\n", fde->fd);
-
 	return fde;
 fde_create_acceptor_err2:
 	unlink(path);
@@ -71,7 +69,6 @@ fde_create_controller(const struct fde *acceptor) {
 		fde->type = FDE_TYPE_CONTROLLER;
 		fde->perms = acceptor->perms;
 		fde->control = control_create();
-		log_print("Created controller %d\n", fde->fd);
 	} else {
 		log_error("fde_create_controller accept");
 	}
@@ -91,11 +88,8 @@ fde_destroy(struct fde *fde) {
 			&len) == 0) {
 			unlink(addr.sun_path);
 		}
-
-		log_print("Destroyed acceptor %d\n", fde->fd);
 	} else {
 		control_destroy(fde->control);
-		log_print("Destroyed controller %d\n", fde->fd);
 	}
 
 	close(fde->fd);
