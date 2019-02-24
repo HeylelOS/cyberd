@@ -2,6 +2,8 @@
 
 #include "../log.h"
 
+#include "../../config.h"
+
 #include <stdlib.h>
 #include <ctype.h> /* isdigit */
 
@@ -19,7 +21,7 @@ control_create(void) {
 void
 control_destroy(struct control *control) {
 
-	if (control->state == CONTROL_STATE_CCTL_NAME) {
+	if (control->state == CONTROL_STATE_CCTL_NAME || (control->state == CONTROL_STATE_END && control->command == COMMAND_CREATE_CONTROLLER)) {
 		free(control->cctl.name.value);
 	}
 
@@ -28,6 +30,10 @@ control_destroy(struct control *control) {
 
 static inline void
 control_state_end(struct control *control, char c) {
+
+	if (control->command == COMMAND_CREATE_CONTROLLER) {
+		free(control->cctl.name.value);
+	}
 
 	control->state = CONTROL_STATE_COMMAND_DETERMINATION;
 	control->command = COMMAND_READER_START;
@@ -74,13 +80,49 @@ control_state_time(struct control *control, char c) {
 static inline void
 control_state_cctl_removing_commands(struct control *control, char c) {
 
-	control->state = CONTROL_STATE_DISCARDING;
+	if (c == ' ') {
+		if (COMMAND_IS_VALID(control->cctl.removing)) {
+			control->cctl.permsmask |= 1 << control->cctl.removing;
+			control->cctl.removing = COMMAND_READER_START;
+		} else {
+			control->state = CONTROL_STATE_DISCARDING;
+		}
+	} else if (c == '\t') {
+
+		control->state = CONTROL_STATE_CCTL_NAME;
+		control->cctl.name.value = calloc(8, sizeof (char));
+		control->cctl.name.length = 0;
+		control->cctl.name.capacity = 8;
+	} else {
+		enum command_reader removing
+			= command_reader_next(control->cctl.removing, c);
+
+		if (removing == COMMAND_READER_DISCARDING) {
+			control->state = CONTROL_STATE_DISCARDING;
+		} else {
+			control->cctl.removing = removing;
+		}
+	}
 }
 
 static inline void
 control_state_cctl_name(struct control *control, char c) {
 
-	control->state = CONTROL_STATE_DISCARDING;
+	if (c == '\0') {
+		control->cctl.name.value[control->cctl.name.length] = '\0';
+		control->state = CONTROL_STATE_END;
+	} else if ((control->cctl.name.length += 1) <= CONFIG_MAX_ACCEPTOR_LEN) {
+
+		if (control->cctl.name.length == control->cctl.name.capacity) {
+			control->cctl.name.value = realloc(control->cctl.name.value,
+				(control->cctl.name.capacity <<= 1) * sizeof (char));
+		}
+
+		control->cctl.name.value[control->cctl.name.length - 1] = c;
+	} else {
+		free(control->cctl.name.value);
+		control->state = CONTROL_STATE_DISCARDING;
+	}
 }
 
 static inline void
@@ -99,39 +141,26 @@ control_state_daemon_name(struct control *control, char c) {
 bool
 control_update(struct control *control, char c) {
 
-	if (isgraph(c) || isblank(c)) {
-		log_print("On character: '%c': ", c);
-	} else {
-		log_print("On character: %d: ", (int)c);
-	}
-
 	switch (control->state) {
 	case CONTROL_STATE_END:
-		log_print("Control-state-end\n");
 		control_state_end(control, c);
 		/* fallthrough */
 	case CONTROL_STATE_COMMAND_DETERMINATION:
-		log_print("Control-state-command-determination\n");
 		control_state_command_determination(control, c);
 		break;
 	case CONTROL_STATE_TIME:
-		log_print("Control-state-time\n");
 		control_state_time(control, c);
 		break;
 	case CONTROL_STATE_CCTL_REMOVING_COMMANDS:
-		log_print("Control-state-cctl-removing-commands\n");
 		control_state_cctl_removing_commands(control, c);
 		break;
 	case CONTROL_STATE_CCTL_NAME:
-		log_print("Control-state-cctl-name\n");
 		control_state_cctl_name(control, c);
 		break;
 	case CONTROL_STATE_DAEMON_NAME:
-		log_print("Control-state-daemon-name\n");
 		control_state_daemon_name(control, c);
 		break;
 	default: /* CONTROL_STATE_DISCARDING */
-		log_print("Control-state-discarding\n");
 		if (c == '\0') {
 			control->state = CONTROL_STATE_END;
 			control->command = COMMAND_UNDEFINED;

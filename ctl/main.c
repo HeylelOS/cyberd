@@ -138,6 +138,7 @@ cyberctl_cctl(int fd,
 		restricted += 1;
 	}
 
+	current[-1] = '\t';
 	strncpy(current, name, buffer + buffersize - current);
 
 	write(fd, buffer, buffersize);
@@ -192,8 +193,7 @@ main(int argc,
 		&&(command = cyberctl_command_system(*argpos)) != NULL) {
 
 		cyberctl_system(fd, command, when, whenlen);
-	} else if (argpos == argv + 1
-		&& strcmp("cctl", *argpos) == 0) {
+	} else if (strcmp("cctl", *argpos) == 0) {
 		argpos += 1;
 
 		cyberctl_cctl(fd, argpos + 1, argend, *argpos);

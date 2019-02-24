@@ -19,7 +19,7 @@ Where:
 <when>: One digit-composed or empty word, interpreted as a unix timestamp, corresponds to universal UTC time.
 an overflow is considered an invalid timestamp.
 <arguments...>: Command defined value/values.
-Separation is done by only one whitespace.
+Separation is done by only one whitespace, except if specified otherwise.
 
 <daemon name> and <acceptor name> refer to filenames
 not beginning with a '.', so not composed by any NUL nor '/'.
@@ -42,7 +42,6 @@ sssp <when> : Suspend system
 
 ## Miscellaneous commands
 
-cctl <removed capabilities> <acceptor name> : Create a new control socket
-	<removed capabilities> : Zero or more of the previously defined command names specifying
-		commands the new socket cannot execute.
-
+cctl<removed capabilities><tabulation><acceptor name> : Create a new control socket
+	<removed capabilities> : Zero or more of the previously defined command names specifying commands the new socket cannot execute. Each prefixed by one ASCII space for separation.
+	<tabulation> : One ASCII TAB character to separate <removed capabilities> from <acceptor name>
