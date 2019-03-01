@@ -25,7 +25,7 @@ bool running;
 
 /**
  * The ending enum specifies what to do when we end.
- * Should we halt, reboot, or sleep?
+ * Should we poweroff, halt, reboot?
  */
 static enum {
 	ENDING_POWEROFF = 0,

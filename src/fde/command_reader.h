@@ -3,6 +3,10 @@
 
 #include "../commands.h"
 
+/**
+ * This enum is used like an automaton to recognize
+ * a command as described in IPCTL.md
+ */
 enum command_reader {
 	COMMAND_READER_START,
 	COMMAND_READER_CREATE_CONTROLLER = COMMAND_CREATE_CONTROLLER,
@@ -36,6 +40,12 @@ enum command_reader {
 	COMMAND_READER_DISCARDING
 };
 
+/**
+ * This function is used to change the state of the automaton
+ * @param current Current state of the automaton
+ * @param c New character determining the next state
+ * @return New state
+ */
 enum command_reader
 command_reader_next(enum command_reader current, char c);
 

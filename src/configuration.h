@@ -13,6 +13,9 @@ void
 configuration_init(void);
 
 #ifdef CONFIG_FULL_CLEANUP
+/**
+ * Frees all internal structures
+ */
 void
 configuration_deinit(void);
 #endif
@@ -20,7 +23,8 @@ configuration_deinit(void);
 /**
  * Re-read daemons, add new ones, reconfigure previous
  * ones, NOT restarting a daemon if it was launched,
- * dereferences and frees removed ones */
+ * dereferences and frees removed ones
+ */
 void
 configuration_reload(void);
 
@@ -30,6 +34,8 @@ configuration_reload(void);
  * pointer outside. At this point, only the scheduler
  * is filled with pointer fetched from this function.
  * and it is emptied at each reload.
+ * @param namehash Hash of the daemon according to its name
+ * @return NULL if not found, the daemon else
  */
 struct daemon *
 configuration_daemon_find(hash_t namehash);

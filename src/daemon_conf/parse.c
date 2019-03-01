@@ -5,6 +5,11 @@
 #include <string.h>
 #include <wordexp.h>
 
+/**
+ * Performs a shell expansion on a line of arguments
+ * @param args Line of arguments to expand
+ * @return List of arguments, NULL terminated
+ */
 static char **
 daemon_conf_expand_arguments(const char *args) {
 	wordexp_t p;
@@ -38,6 +43,9 @@ daemon_conf_expand_arguments(const char *args) {
 	return arguments;
 }
 
+/**
+ * Section in the configuration file
+ */
 enum daemon_conf_section {
 	SECTION_UNKNOWN,
 	SECTION_GENERAL,
@@ -72,6 +80,7 @@ daemon_conf_parse(struct daemon_conf *conf,
 
 			strsep(&value, "=");
 
+			/* This function will certainly more ugly in the future */
 			switch(section) {
 			case SECTION_GENERAL:
 				if(value == NULL) {
