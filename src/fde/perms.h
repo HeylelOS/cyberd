@@ -3,9 +3,11 @@
 
 #include "../commands.h"
 
-/* Which commands a controller can execute */
+/**
+ * Type for the bitmask holding Which commands a controller can execute
+ */
 typedef unsigned long perms_t;
-#define PERMS_ZERO (1 << 0) /* UNUSED */
+#define PERMS_ZERO (1 << 0) /**< UNUSED */
 
 #define PERMS_CREATE_CONTROLLER (1 << COMMAND_CREATE_CONTROLLER)
 
