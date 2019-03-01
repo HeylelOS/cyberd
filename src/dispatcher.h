@@ -6,32 +6,33 @@
 #define dispatcher_writeset() NULL
 #define dispatcher_errorset() NULL
 
+/**
+ * Initializes dispatcher structures and main initctl socket
+ */
 void
 dispatcher_init(void);
 
 /**
- * dispatcher_deinit required because we must unlink acceptors
+ * Required because we must unlink socket's acceptors
  */
 void
 dispatcher_deinit(void);
 
 /**
- * Returns the biggest file descriptor dispatched
+ * @return The biggest file descriptor dispatched
  */
 int
 dispatcher_lastfd(void);
 
 /**
- * Prepare internal readset (copies activeset into it)
- * and returns it
+ * @return Internal prepared readset (copies activeset into it)
  */
 fd_set *
 dispatcher_readset(void);
 
 /**
- * Handle fds number of file descriptor, when
- * the dispatcher fd_sets were previously
- * (p)select()'ed
+ * @param fds Number of file descriptors to handle, when
+ * the dispatcher fd_sets' were just previously (p)select()'ed
  */
 void
 dispatcher_handle(unsigned int fds);

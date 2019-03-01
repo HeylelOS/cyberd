@@ -26,14 +26,13 @@ void
 daemon_destroy(struct daemon *daemon) {
 
 	if (daemon->state != DAEMON_STOPPED) {
-		/* Remove daemon index in spawns if
-		previously spawned */
+		/* Remove daemon index in spawns if previously spawned */
 		spawns_retrieve(daemon->pid);
 	}
 
-	free(daemon->name);
-
 	daemon_conf_deinit(&daemon->conf);
+
+	free(daemon->name);
 
 	free(daemon);
 }
