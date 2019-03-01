@@ -9,6 +9,8 @@ static const char *configurationdirs[] UNUSED = {
 	"./test/daemons"
 };
 
+#define CONFIG_DEFAULT_UMASK (S_IWGRP | S_IWOTH)
+
 #define CONFIG_CONNECTIONS_LIMIT 64
 #define CONFIG_MAX_ACCEPTOR_LEN 255
 
@@ -17,8 +19,12 @@ static const char *configurationdirs[] UNUSED = {
 
 #define CONFIG_READ_BUFFER_SIZE 512
 
+#define CONFIG_DEBUG 1
+
+#ifdef CONFIG_DEBUG
 #define CONFIG_STDOUT_LOG 1
 #define CONFIG_FULL_CLEANUP 1
+#endif
 
 /* CONFIG_H */
 #endif
