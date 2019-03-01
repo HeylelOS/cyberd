@@ -7,10 +7,12 @@
 
 #include "../config.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <unistd.h> /* sync */
 #include <time.h> /* nanosleep */
+#include <sys/stat.h> /* umask */
 #include <errno.h>
 
 #ifndef NORETURN
@@ -33,6 +35,27 @@ static enum {
 	ENDING_REBOOT = 2,
 	ENDING_SUSPEND = 3
 } ending;
+
+/**
+ * Quick begin check to ensure we are init and set umask
+ */
+static void
+begin(void) {
+
+	umask(CONFIG_DEFAULT_UMASK);
+
+#ifndef CONFIG_DEBUG
+	if(getpid() != 1) {
+		fprintf(stderr, "cyberd must be pid 1\n");
+		exit(EXIT_FAILURE);
+	}
+
+	if (geteuid() != 0) {
+		fprintf(stderr, "cyberd must be run as root\n");
+		exit(EXIT_FAILURE);
+	}
+#endif
+}
 
 /**
  * Ending init, lot of cleanup, the daemons timeout is 5 seconds,
@@ -90,6 +113,7 @@ int
 main(int argc,
 	const char **argv) {
 	/* Environnement initialization, order matters */
+	begin();
 	log_init();
 	signals_init();
 	spawns_init();
