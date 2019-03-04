@@ -62,8 +62,8 @@ begin(void) {
 }
 
 /**
- * Ending init, lot of cleanup, the daemons timeout is 5 seconds,
- * Note some structures (scheduler) are not freed, because
+ * Ending init, lot of cleanup, daemons timeout is 5 seconds,
+ * Note some structures (scheduler) are not freed by default, because
  * they do not hold sensible system ressources, such as locks, files..
  */
 static void NORETURN

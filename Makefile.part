@@ -14,9 +14,10 @@ all: $(BUILDDIRS) $(INIT_BIN) $(INITCTL_BIN)
 
 install: $(INSTALLDIRS) $(BIN)
 	cp -r $(BUILDDIR)/bin/* $(INSTALLBINDIR)/
+	cp -r ./man/* $(INSTALLMANDIR)/
 
 clean:
-	rm -rf build/ Makefile config.h
+	rm -rf build/
 
 $(BUILDDIRS):
 	mkdir $@
