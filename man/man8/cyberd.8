@@ -1,0 +1,22 @@
+.\" manpage for the cyberctl init control command
+.TH "cyberd" 1 "Mon Mar 4 2019" "cyberd"
+.SH NAME
+cyberd - init process
+.SH SYNOPSIS
+\fBcyberd\fR
+.SH DESCRIPTION
+cyberd is an init process meant for UNIX-like operating systems.
+It is neither a System V-like nor a BSD-like init system. It only supports daemons,
+and starts them upon configuration-load/reload.
+Each daemon is associated with a file in the configuration directory (or directories).
+On HeylelOS this directory is \fB/persistent/daemons\fR.
+Only one instance of a daemon can run at any time, and through cyberctl(1), you may start stop or end it. The file syntax is yet to be documented when more features are added.
+.PP
+cyberd was designed to be a daemon-leader as an init process.
+Its lack of other functionalities is only a proof of its UNIX-philosophy compliance.
+.SH SEE ALSO
+cyberctl(1)
+.SH BUGS
+No known bugs.
+.SH AUTHOR
+Valentin Debon (valentin.debon@heylelos.org)

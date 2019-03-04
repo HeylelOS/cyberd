@@ -99,7 +99,10 @@ else
 fi
 
 # CFLAGS
-[ -z "$CFLAGS" ] && CFLAGS='-O3 -Wall -fPIC'
+if [ -z "$CFLAGS" ]
+then
+	CFLAGS='-O3 -Wall -fPIC'
+fi
 
 echo "Using C flags '$CFLAGS'"
 

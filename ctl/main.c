@@ -11,6 +11,7 @@
 #include "../config.h"
 
 static const char *cyberctlname;
+static const char *ctlpath = CONFIG_INITCTL_PATH;
 
 static void
 cyberctl_usage(void) {
@@ -168,6 +169,11 @@ main(int argc,
 		cyberctl_usage();
 	}
 
+	const char *ctlenv = getenv("CYBERCTL_SOCKET");
+	if(ctlenv != NULL) {
+		ctlpath = ctlenv;
+	}
+
 	const char *when = "0";
 	const char *whenend;
 	if(strcmp("-t", *argpos) == 0
@@ -179,7 +185,7 @@ main(int argc,
 		whenend = when + 1;
 	}
 
-	int fd = cyberctl_open(CONFIG_INITCTL_PATH);
+	int fd = cyberctl_open(ctlpath);
 	size_t whenlen = whenend - when;
 	const char *command;
 
