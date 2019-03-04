@@ -13,10 +13,15 @@
 #include <unistd.h> /* sync */
 #include <time.h> /* nanosleep */
 #include <sys/stat.h> /* umask */
+#include <sys/reboot.h> /* reboot */
 #include <errno.h>
 
 #ifndef NORETURN
 #define NORETURN __attribute__((noreturn))
+#endif
+
+#ifdef RB_HALT_SYSTEM
+#define RB_HALT RB_HALT_SYSTEM
 #endif
 
 /**
@@ -32,8 +37,7 @@ bool running;
 static enum {
 	ENDING_POWEROFF = 0,
 	ENDING_HALT = 1,
-	ENDING_REBOOT = 2,
-	ENDING_SUSPEND = 3
+	ENDING_REBOOT = 2
 } ending;
 
 /**
@@ -102,11 +106,50 @@ end(void) {
 	log_deinit();
 
 	/* Synchronize all filesystems to disk(s),
-	note: Standard specifies it may return before all syncs done,
-	but the Linux kernel is synchronous */
+	note: Standard specifies it may return before all syncs done */
 	sync();
 
-	exit(EXIT_SUCCESS);
+	/* Nothing standard in the following part */
+	int howto;
+	switch(ending) {
+#ifdef RB_POWER_OFF
+	case ENDING_POWEROFF:
+		howto = RB_POWER_OFF;
+		break;
+#else
+#warning "Unsupported poweroff operation will not be available"
+#endif
+#ifdef RB_HALT
+	case ENDING_HALT:
+		howto = RB_HALT;
+		break;
+#else
+#warning "Unsupported halt operation will not be available"
+#endif
+	default: /* ENDING_REBOOT */
+		howto = RB_AUTOBOOT;
+		break;
+	}
+
+	reboot(howto);
+	/* We reached an error */
+	exit(EXIT_FAILURE);
+}
+
+/**
+ * System is supended if supported
+ */
+static void
+suspend(void) {
+
+#ifdef RB_SW_SUSPEND
+	if(reboot(RB_SW_SUSPEND) == -1) {
+		log_error("reboot(RB_SW_SUSPEND)");
+	}
+#else
+#warning "Unsupported suspend operation will not be available"
+	log_print("Suspend not available on this operating system\n");
+#endif
 }
 
 int
@@ -168,8 +211,12 @@ main(int argc,
 				break;
 			default:
 				if(COMMAND_IS_SYSTEM(activity.action)) {
-					ending = activity.action - SCHEDULE_SYSTEM_POWEROFF;
-					running = false;
+					if(activity.action == SCHEDULE_SYSTEM_SUSPEND) {
+						suspend();
+					} else {
+						ending = activity.action - SCHEDULE_SYSTEM_POWEROFF;
+						running = false;
+					}
 				} else {
 					log_print("Unknown scheduled action received\n");
 				} break;
