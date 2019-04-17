@@ -2,7 +2,7 @@
 #define CONFIGURATION_H
 
 #include "daemon.h"
-#include "../config.h"
+#include "config.h"
 
 /**
  * Initializes data structures, load daemons
