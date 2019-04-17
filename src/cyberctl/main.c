@@ -8,7 +8,7 @@
 #include <sys/un.h>
 #include <errno.h>
 
-#include "../config.h"
+#include "config.h"
 
 static const char *cyberctlname;
 static const char *ctlpath = CONFIG_INITCTL_PATH;

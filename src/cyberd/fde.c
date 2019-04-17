@@ -1,7 +1,7 @@
 #include "fde.h"
 #include "log.h"
 
-#include "../config.h"
+#include "config.h"
 
 #include <stdlib.h>
 #include <unistd.h>

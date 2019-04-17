@@ -1,6 +1,6 @@
 #include "scheduler.h"
 
-#include "../config.h"
+#include "config.h"
 
 #include <stdlib.h>
 #include <stdbool.h>

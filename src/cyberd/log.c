@@ -1,6 +1,6 @@
 #include "log.h"
 
-#include "../config.h"
+#include "config.h"
 
 #ifndef CONFIG_STDOUT_LOG
 #include <syslog.h>

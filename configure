@@ -40,7 +40,7 @@ Optional Features:
   --debug                    configure a debug build
 
 Some influential environment variables:
-  NAME            cyberd/cyberctl executable name, default cyber
+  NAME            cyber{d,ctl} executables name, default cyber
   CC              C compiler command, default in clang gcc cc
   CFLAGS          C compiler flags, default -O3 -Wall -fPIC
   LDFLAGS         linker flags, e.g. -L<lib dir> if you have libraries in a
@@ -144,10 +144,10 @@ cat <<EOF > config.h
 #ifdef CONFIG_DEBUG
 #define CONFIG_STDOUT_LOG 1
 #define CONFIG_FULL_CLEANUP 1
-#define CONFIG_CONTROLLERS_DIRECTORY "./test"
+#define CONFIG_CONTROLLERS_DIRECTORY "./test/cyberd"
 
 static const char *configurationdirs[] UNUSED = {
-	"./test/daemons"
+	"./test/cyberd/daemons"
 };
 #else
 #define CONFIG_CONTROLLERS_DIRECTORY "/var/init"
