@@ -3,7 +3,7 @@
 #include "tree.h"
 #include "scheduler.h"
 
-#include "../config.h"
+#include "config.h"
 
 #include <stdio.h>
 #include <sys/param.h>
