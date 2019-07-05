@@ -7,7 +7,7 @@
 
 /*
  * spawns.h holds the structure which records every
- * spawn of every daemons. Only daemon.c accesses it for safety
+ * spawn of every daemons. Only daemon.c and main.c access it for safety
  */
 
 /**
@@ -34,6 +34,8 @@ spawns_empty(void);
  */
 void
 spawns_end(void);
+
+/* The followings are daemon.c reserved */
 
 /**
  * Record a new running daemon

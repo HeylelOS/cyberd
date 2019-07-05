@@ -116,7 +116,7 @@ INSTALLMANDIR=$MANDIR
 INSTALLDIRS=\$(INSTALLBINDIR) \$(INSTALLMANDIR)
 EOF
 
-cat <<EOF > config.h
+cat <<EOF > src/config.h
 #ifndef CONFIG_H
 #define CONFIG_H
 

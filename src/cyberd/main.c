@@ -35,9 +35,9 @@ bool running;
  * Should we poweroff, halt, reboot?
  */
 static enum {
-	ENDING_POWEROFF = 0,
-	ENDING_HALT = 1,
-	ENDING_REBOOT = 2
+	ENDING_POWEROFF,
+	ENDING_HALT,
+	ENDING_REBOOT
 } ending;
 
 /**
@@ -154,10 +154,10 @@ suspend(void) {
 
 int
 main(int argc,
-	const char **argv) {
+	char **argv) {
 	/* Environnement initialization, order matters */
 	begin();
-	log_init();
+	log_init(*argv);
 	signals_init();
 	spawns_init();
 	scheduler_init();
@@ -184,7 +184,7 @@ main(int argc,
 		fds = pselect(fds,
 			readfdsp, writefdsp, errorfdsp,
 			timeoutp,
-			&signals_selmask);
+			signals_sigset());
 
 		if(fds > 0) {
 			/* Fdset I/O */
