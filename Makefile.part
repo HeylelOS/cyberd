@@ -9,7 +9,7 @@ CYBERCTL_BIN=build/bin/$(NAME)ctl
 
 .PHONY: all install clean
 
-all: $(BUILDDIR) $(CYBERD_BIN) $(CYBERCTL_BIN)
+all: $(CYBERD_BIN) $(CYBERCTL_BIN)
 
 install: $(INSTALLDIRS) $(BIN)
 	cp -r $(BUILDDIR)/bin/* $(INSTALLBINDIR)/
@@ -25,9 +25,9 @@ $(BUILDDIR):
 $(INSTALLDIRS):
 	mkdir $@
 
-$(CYBERD_BIN): $(CYBERD_SRC)
-	$(CC) -I./ $(CFLAGS) -o $@ $^
+$(CYBERD_BIN): $(CYBERD_SRC) $(BUILDDIR)
+	$(CC) -I./ $(CFLAGS) -o $@ $(CYBERD_SRC)
 
-$(CYBERCTL_BIN): $(CYBERCTL_SRC)
-	$(CC) -I./ $(CFLAGS) -o $@ $^
+$(CYBERCTL_BIN): $(CYBERCTL_SRC) $(BUILDDIR)
+	$(CC) -I./ $(CFLAGS) -o $@ $(CYBERCTL_SRC)
 
