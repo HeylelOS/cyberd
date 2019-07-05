@@ -7,13 +7,13 @@
 
 #include "config.h"
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <unistd.h> /* sync */
 #include <time.h> /* nanosleep */
 #include <sys/stat.h> /* umask */
 #include <sys/reboot.h> /* reboot */
+#include <dirent.h>
 #include <errno.h>
 #include <err.h>
 
@@ -42,7 +42,7 @@ static enum {
 } ending;
 
 /**
- * Quick begin check to ensure we are init and set umask
+ * Initialize umask, check/purge init environnement
  */
 static void
 begin(void) {
@@ -51,11 +51,29 @@ begin(void) {
 
 #ifndef CONFIG_DEBUG
 	if (getpid() != 1) {
-		err(EXIT_FAILURE, "cyberd must be pid 1\n");
+		err(EXIT_FAILURE, "cyberd must be pid 1");
 	}
 
 	if (geteuid() != 0) {
-		err(EXIT_FAILURE, "cyberd must be pid 1\n");
+		err(EXIT_FAILURE, "cyberd must be run as root");
+	}
+
+	DIR *dirp = opendir("/proc/1/fd");
+	if (dirp != NULL) {
+		struct dirent *entry;
+
+		while ((errno = 0, entry = readdir(dirp)) != NULL) {
+			char *end;
+			unsigned long fd = strtoul(entry->d_name, &end, 10);
+
+			if (*end == '\0') {
+				close((int)fd);
+			}
+		}
+
+		closedir(dirp);
+	} else {
+		warnx("Unable to close init file descriptor, is /proc mounted?");
 	}
 #endif
 }
