@@ -10,6 +10,9 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h> /* memcpy, memset */
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <errno.h>
 
 static struct {
 	struct {
@@ -60,16 +63,21 @@ dispatcher_init(void) {
 
 	tree_init(&dispatcher.fds, dispatcher_hash_fd);
 
-	struct fde *acceptor
-		= fde_create_acceptor("initctl",
-			PERMS_CREATE_CONTROLLER | 
-			PERMS_DAEMON_ALL |
-			PERMS_SYSTEM_ALL);
+	if(mkdir(CONFIG_CONTROLLERS_DIRECTORY, S_IRWXU | S_IRWXG | S_IRWXO) == 0
+		|| errno == EEXIST) { /* If it already exists, we postpone the error if its not a directory */
+		struct fde *acceptor
+			= fde_create_acceptor("initctl",
+				PERMS_CREATE_CONTROLLER | 
+				PERMS_DAEMON_ALL |
+				PERMS_SYSTEM_ALL);
 
-	if(acceptor != NULL) {
-		dispatcher_insert(acceptor);
+		if(acceptor != NULL) {
+			dispatcher_insert(acceptor);
+		} else {
+			log_print("dispatcher_init: Unable to create main 'initctl' acceptor\n");
+		}
 	} else {
-		log_print("dispatcher_init: Unable to create main 'initctl' acceptor\n");
+		log_error("dispatcher_init: Unable to create controllers directory '"CONFIG_CONTROLLERS_DIRECTORY"'");
 	}
 }
 
