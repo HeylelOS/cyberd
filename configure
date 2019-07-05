@@ -29,8 +29,8 @@ Some influential environment variables:
   CFLAGS          C compiler flags [-O3 -Wall -fPIC] when -r specified, [-g -Wall -fPIC] else
   LDFLAGS         linker flags []
 
-  DAEMONCONFS     where will daemon configurations be set [/etc/daemons] when -r specified, [./test/cyberd/daemons] else
-  IPCSOCKETS      where will IPC sockets be created [/var/init] when -r specified, [./test/cyberd] else
+  DAEMONCONFS     where will daemon configurations be set [/etc/daemons] when -r specified, [$PWD/test/cyberd/daemons] else
+  IPCSOCKETS      where will IPC sockets be created [/var/init] when -r specified, [$PWD/test/cyberd] else
 
   PREFIX          where to install files [/usr/local]
   BINDIR          where to install executables [\$PREFIX/bin]
@@ -83,7 +83,7 @@ echo "Using Linker flags: '$LDFLAGS'"
 if [ -z "$DAEMONCONFS" ]
 then
 	if [ ! -z "$CONFIG_DEBUG" ]
-	then DAEMONCONFS='./test/cyberd/daemons'
+	then DAEMONCONFS="$PWD/test/cyberd/daemons"
 	else DAEMONCONFS='/etc/daemons'
 	fi
 fi
@@ -91,7 +91,7 @@ fi
 if [ -z "$IPCSOCKETS" ]
 then
 	if [ ! -z "$CONFIG_DEBUG" ]
-	then IPCSOCKETS='./test/cyberd'
+	then IPCSOCKETS="$PWD/test/cyberd"
 	else IPCSOCKETS='/var/init'
 	fi
 fi
@@ -127,7 +127,6 @@ cat <<EOF > src/config.h
 
 #define CONFIG_DAEMONCONFS_DIRECTORY "$DAEMONCONFS"
 #define CONFIG_CONTROLLERS_DIRECTORY "$IPCSOCKETS"
-#define CONFIG_INITCTL_PATH CONFIG_CONTROLLERS_DIRECTORY"/initctl"
 
 #define CONFIG_DEFAULT_UMASK 022
 

@@ -17,12 +17,12 @@ struct fde {
 
 /**
  * Creates a new socket to listen to IPCs
- * @param path Path to the new socket in the filesystem
+ * @param name Name of the socket in controllers' directory
  * @param perms Allowed actions in the filesystem
  * @return Newly allocated File Descriptor Element, must be fde_destroy()'d
  */
 struct fde *
-fde_create_acceptor(const char *path, perms_t perms);
+fde_create_acceptor(const char *name, perms_t perms);
 
 /**
  * Creates a new socket for incoming IPCs

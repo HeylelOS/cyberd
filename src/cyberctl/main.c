@@ -11,7 +11,7 @@
 #include "config.h"
 
 static const char *cyberctlname;
-static const char *ctlpath = CONFIG_INITCTL_PATH;
+static const char *ctlpath = CONFIG_CONTROLLERS_DIRECTORY"/initctl";
 
 static void
 cyberctl_usage(void) {

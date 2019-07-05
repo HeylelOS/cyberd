@@ -9,8 +9,7 @@
 
 #include <stdlib.h>
 #include <unistd.h>
-#include <string.h> /* memcpy, memset, strncpy */
-#include <sys/param.h> /* MAXPATHLEN */
+#include <string.h> /* memcpy, memset */
 
 static struct {
 	struct {
@@ -62,7 +61,7 @@ dispatcher_init(void) {
 	tree_init(&dispatcher.fds, dispatcher_hash_fd);
 
 	struct fde *acceptor
-		= fde_create_acceptor(CONFIG_INITCTL_PATH,
+		= fde_create_acceptor("initctl",
 			PERMS_CREATE_CONTROLLER | 
 			PERMS_DAEMON_ALL |
 			PERMS_SYSTEM_ALL);
@@ -70,8 +69,7 @@ dispatcher_init(void) {
 	if (acceptor != NULL) {
 		dispatcher_insert(acceptor);
 	} else {
-		log_print("dispatcher_init: Unable to create '%s' acceptor\n",
-			CONFIG_INITCTL_PATH);
+		log_print("dispatcher_init: Unable to create main 'initctl' acceptor\n");
 	}
 }
 
@@ -147,16 +145,8 @@ dispatcher_handle_controller(struct fde *controller) {
 			if (control_update(control, *current) && COMMAND_IS_VALID(control->command)
 				&& ((controller->perms | (1 << control->command)) == controller->perms)) {
 				if (control->command == COMMAND_CREATE_CONTROLLER) {
-					/* We can safely assume sizeof (CONFIG_CONTROLLERS_DIRECTORY) < MAXPATHLEN */
-					char path[MAXPATHLEN];
-					char *name = stpncpy(path, CONFIG_CONTROLLERS_DIRECTORY,
-						sizeof (CONFIG_CONTROLLERS_DIRECTORY));
-					*name = '/';
-					strncpy((name += 1), control->cctl.name.value,
-						MAXPATHLEN - sizeof (CONFIG_CONTROLLERS_DIRECTORY) - 1);
-					path[MAXPATHLEN - 1] = '\0';
 					struct fde *acceptor
-						= fde_create_acceptor(path,
+						= fde_create_acceptor(control->cctl.name.value,
 							controller->perms
 							& ~control->cctl.permsmask);
 
