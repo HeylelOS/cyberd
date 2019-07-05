@@ -10,12 +10,13 @@ principle of "each process its task" behind the UNIX philosophy.
 
 Secondly, why not take sysvinit, or another one? Because I don't agree with the notion of runlevels.
 A very good idea at the time it was created, but now pretty useless. When runlevels where created,
-users chose between a graphical or a terminal based boot. But now users don't care anymore and just boot in one mode.
-So this init system juste loads daemons and allows users to start, stop, signal and end them.
+users chose between a graphical or a terminal based boot.
+But now users don't care anymore and just boot in one mode. Or the bootloader does the job.
+So this init system just loads daemons and allows users to start, stop, signal and end them.
 
 ## Features
 
-In this actual testing state, cyberd can:
+In this actual alpha state, cyberd can:
 - Start daemons, with command line arguments, at cyberd load or configuration reload.
 - Stop daemons, by sending them a SIGTERM signal.
 - Reload daemons, by sending a SIGHUP signal.
