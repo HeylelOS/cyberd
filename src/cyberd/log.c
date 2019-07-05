@@ -43,12 +43,19 @@ log_print(const char *format, ...) {
 }
 
 void
-log_error(const char *message) {
+log_error(const char *format, ...) {
+	char buffer[CONFIG_LOG_ERROR_BUFFER_SIZE];
+	va_list ap;
+
+	va_start(ap, format);
+	vsnprintf(buffer, sizeof(buffer), format, ap);
+	buffer[sizeof(buffer) - 1] = '\0';
+	va_end(ap);
 
 #ifndef CONFIG_STDOUT_LOG
-	syslog(LOG_ERR, "%s: %m\n", message);
+	syslog(LOG_ERR, "%s: %m\n", buffer);
 #else
-	warn("%s", message);
+	warn("%s", buffer);
 #endif
 }
 
