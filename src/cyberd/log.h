@@ -3,7 +3,7 @@
 
 /** Init logging if needed */
 void
-log_init(void);
+log_init(char *cyberdname);
 
 /** Closes logging if needed */
 void
@@ -14,8 +14,7 @@ log_deinit(void);
  * @param format Format to follow
  */
 void
-log_print(const char *format,
-	...);
+log_print(const char *format, ...);
 
 /**
  * Prints the message followed by an error message depending on errno
