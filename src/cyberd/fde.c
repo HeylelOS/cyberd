@@ -3,9 +3,9 @@
 
 #include "config.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <string.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <errno.h> /* to show overflow in fde_create_acceptor */
@@ -13,30 +13,29 @@
 #define SOCKADDR_UN_MAXLEN sizeof(((struct sockaddr_un *)NULL)->sun_path)
 
 struct fde *
-fde_create_acceptor(const char *path, perms_t perms) {
+fde_create_acceptor(const char *name, perms_t perms) {
+	struct sockaddr_un addr = { .sun_family = AF_LOCAL };
 	int fd = socket(AF_LOCAL, SOCK_STREAM, 0);
 
 	if(fd == -1) {
-		log_error("fde_create_acceptor socket");
+		log_error("fde_create_acceptor socket %s", name);
 		goto fde_create_acceptor_err0;
 	}
 
-	struct sockaddr_un addr = { .sun_family = AF_LOCAL };
-	char * const end = stpncpy(addr.sun_path, path, SOCKADDR_UN_MAXLEN);
-
-	if(end >= addr.sun_path + SOCKADDR_UN_MAXLEN) {
+	if(snprintf(addr.sun_path, SOCKADDR_UN_MAXLEN,
+		CONFIG_CONTROLLERS_DIRECTORY"/%s", name) >= SOCKADDR_UN_MAXLEN) {
 		errno = EOVERFLOW;
-		log_error("fde_create_acceptor");
+		log_error("fde_create_acceptor %s", name);
 		goto fde_create_acceptor_err1;
 	}
 
 	if(bind(fd, (const struct sockaddr *)&addr, sizeof(addr)) != 0) {
-		log_error("fde_create_acceptor bind");
+		log_error("fde_create_acceptor bind %s", name);
 		goto fde_create_acceptor_err1;
 	}
 
 	if(listen(fd, CONFIG_CONNECTIONS_LIMIT) != 0) {
-		log_error("fde_create_acceptor listen");
+		log_error("fde_create_acceptor listen %s", name);
 		goto fde_create_acceptor_err2;
 	}
 
@@ -48,7 +47,7 @@ fde_create_acceptor(const char *path, perms_t perms) {
 
 	return fde;
 fde_create_acceptor_err2:
-	unlink(path);
+	unlink(addr.sun_path);
 fde_create_acceptor_err1:
 	close(fd);
 fde_create_acceptor_err0:

@@ -15,6 +15,7 @@
 #include <sys/stat.h> /* umask */
 #include <sys/reboot.h> /* reboot */
 #include <errno.h>
+#include <err.h>
 
 #ifndef NORETURN
 #define NORETURN __attribute__((noreturn))
@@ -50,13 +51,11 @@ begin(void) {
 
 #ifndef CONFIG_DEBUG
 	if(getpid() != 1) {
-		fprintf(stderr, "cyberd must be pid 1\n");
-		exit(EXIT_FAILURE);
+		err(EXIT_FAILURE, "cyberd must be pid 1\n");
 	}
 
 	if (geteuid() != 0) {
-		fprintf(stderr, "cyberd must be run as root\n");
-		exit(EXIT_FAILURE);
+		err(EXIT_FAILURE, "cyberd must be pid 1\n");
 	}
 #endif
 }
