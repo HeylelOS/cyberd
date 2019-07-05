@@ -6,15 +6,14 @@
 #include "config.h"
 
 #include <stdio.h>
-#include <sys/param.h>
 #include <string.h>
+#include <unistd.h>
 #include <dirent.h>
-#include <errno.h> /* to show overflow in daemons_dir_iterate */
+#include <fcntl.h>
+#include <errno.h>
 
 /* Main storage for daemons */
 static struct tree daemons;
-/* Temporary tree used when reloading configuration */
-static struct tree reloadtmp;
 
 static hash_t
 daemons_hash_field(const tree_element_t *element) {
@@ -23,64 +22,22 @@ daemons_hash_field(const tree_element_t *element) {
 	return daemon->namehash;
 }
 
-/* Iterate each file in configurationdirs to load daemonconfs */
 static void
-daemons_dir_iterate(void (*callback)(const struct dirent *, FILE *)) {
-	char pathbuf[MAXPATHLEN];
-	char *pathend = stpncpy(pathbuf, CONFIG_DAEMONCONFS_DIRECTORY, sizeof(pathbuf));
-	size_t namemax;
-	DIR *dirp;
-	const struct dirent *entry;
+daemons_preorder_cleanup(struct tree_node *node) {
 
-	/* Preparing path iteration */
-	if(pathend >= pathbuf + sizeof(pathbuf) - 1) {
-		errno = EOVERFLOW;
-		log_error("daemons_dir_iterate");
-		return;
+	if(node != NULL) {
+		struct daemon *daemon = node->element;
+
+		daemon_destroy(daemon);
+
+		daemons_preorder_cleanup(node->left);
+		daemons_preorder_cleanup(node->right);
 	}
-	*pathend = '/';
-	pathend += 1;
-	namemax = pathbuf + sizeof(pathbuf) - 1 - pathend;
-
-	/* Open load directory */
-	if((dirp = opendir(pathbuf)) == NULL) {
-		log_print("daemons_dir_iterate: Unable to open configuration directory \"%s\"\n",
-			pathbuf);
-		return;
-	}
-
-	log_print("Iterating configuration directory '%s'\n", pathbuf);
-
-	/* Iterating load directory */
-	while((entry = readdir(dirp)) != NULL) {
-		if((entry->d_type == DT_REG
-			|| entry->d_type == DT_LNK)
-			&& entry->d_name[0] != '.') {
-			FILE *filep;
-
-			strncpy(pathend, entry->d_name, namemax);
-
-			/* Open the current daemon config file */
-			if((filep = fopen(pathbuf, "r")) != NULL) {
-
-				callback(entry, filep);
-				fclose(filep);
-			} else {
-				log_error("fopen");
-			}
-
-			/* Closing path */
-			*pathend = '\0';
-		}
-	}
-
-	closedir(dirp);
 }
 
 static void
-daemons_load(const struct dirent *entry,
-	FILE *filep) {
-	struct daemon *daemon = daemon_create(entry->d_name);
+configuration_daemons_load(const char *name, FILE *filep) {
+	struct daemon *daemon = daemon_create(name);
 
 	if(daemon_conf_parse(&daemon->conf, filep)) {
 		struct tree_node *node = tree_node_create(daemon);
@@ -97,45 +54,14 @@ daemons_load(const struct dirent *entry,
 	}
 }
 
-void
-configuration_init(void) {
-
-	log_print("Configurating...\n");
-	tree_init(&daemons, daemons_hash_field);
-	daemons_dir_iterate(daemons_load);
-}
-
 static void
-daemons_preorder_cleanup(struct tree_node *node) {
-
-	if(node != NULL) {
-		struct daemon *daemon = node->element;
-
-		daemon_destroy(daemon);
-
-		daemons_preorder_cleanup(node->left);
-		daemons_preorder_cleanup(node->right);
-	}
-}
-
-#ifdef CONFIG_FULL_CLEANUP
-void
-configuration_deinit(void) {
-
-	daemons_preorder_cleanup(daemons.root);
-	tree_deinit(&daemons);
-}
-#endif
-
-static void
-daemons_reload(const struct dirent *entry,
-	FILE *filep) {
+configuration_daemons_reload(const char *name, FILE *filep, struct tree *olddaemons) {
 	struct tree_node *node
-		= tree_remove(&reloadtmp, hash_string(entry->d_name));
+		= tree_remove(olddaemons, hash_string(name));
 
 	if(node == NULL) {
 		/* New daemon */
-		daemons_load(entry, filep);
+		configuration_daemons_load(name, filep);
 	} else {
 		/* Reloading existing daemon */
 		struct daemon *daemon = node->element;
@@ -161,16 +87,91 @@ daemons_reload(const struct dirent *entry,
 	}
 }
 
+static FILE *
+configuration_fopenat(int dirfd, const char *path) {
+	int fd = openat(dirfd, path, O_RDONLY);
+	FILE *filep = NULL;
+
+	if(fd >= 0) {
+		if((filep = fdopen(fd, "r")) == NULL) {
+			close(fd);
+			log_error("fdopen");
+		}
+	} else {
+		log_error("openat");
+	}
+
+	return filep;
+}
+
+void
+configuration_init(void) {
+	DIR *dirp;
+
+	log_print("Configurating...\n");
+	tree_init(&daemons, daemons_hash_field);
+
+	if((dirp = opendir(CONFIG_DAEMONCONFS_DIRECTORY)) != NULL) {
+		struct dirent *entry;
+
+		while((errno = 0, entry = readdir(dirp)) != NULL) {
+			FILE *filep;
+
+			if(entry->d_type == DT_REG && *entry->d_name != '.'
+				&& (filep = configuration_fopenat(dirfd(dirp), entry->d_name)) != NULL) {
+
+				configuration_daemons_load(entry->d_name, filep);
+			}
+		}
+
+		if(errno != 0) {
+			log_error("readdir");
+		}
+	} else {
+		log_error("opendir");
+	}
+}
+
+#ifdef CONFIG_FULL_CLEANUP
+void
+configuration_deinit(void) {
+
+	daemons_preorder_cleanup(daemons.root);
+	tree_deinit(&daemons);
+}
+#endif
+
 void
 configuration_reload(void) {
+	struct tree olddaemons = daemons;
+	DIR *dirp;
 
 	log_print("Reconfigurating...");
 	scheduler_empty();
-	reloadtmp = daemons;
 	tree_init(&daemons, daemons_hash_field);
-	daemons_dir_iterate(daemons_reload);
-	daemons_preorder_cleanup(reloadtmp.root);
-	tree_deinit(&reloadtmp);
+
+	if((dirp = opendir(CONFIG_DAEMONCONFS_DIRECTORY)) != NULL) {
+		struct dirent *entry;
+
+		while((errno = 0, entry = readdir(dirp)) != NULL) {
+			FILE *filep;
+
+			if(entry->d_type == DT_REG && *entry->d_name != '.'
+				&& (filep = configuration_fopenat(dirfd(dirp), entry->d_name)) != NULL) {
+
+				configuration_daemons_reload(entry->d_name, filep, &olddaemons);
+			}
+		}
+
+		if(errno != 0) {
+			log_error("readdir");
+		}
+	} else {
+		log_error("opendir");
+	}
+
+	daemons_preorder_cleanup(olddaemons.root);
+	tree_deinit(&olddaemons);
 }
 
 struct daemon *
