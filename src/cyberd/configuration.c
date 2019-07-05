@@ -26,60 +26,55 @@ daemons_hash_field(const tree_element_t *element) {
 /* Iterate each file in configurationdirs to load daemonconfs */
 static void
 daemons_dir_iterate(void (*callback)(const struct dirent *, FILE *)) {
-	const char **iterator = configurationdirs;
-	const char ** const end = configurationdirs + sizeof (configurationdirs) / sizeof (char *);
 	char pathbuf[MAXPATHLEN];
+	char *pathend = stpncpy(pathbuf, CONFIG_DAEMONCONFS_DIRECTORY, sizeof (pathbuf));
+	size_t namemax;
+	DIR *dirp;
+	const struct dirent *entry;
 
-	for (; iterator != end; iterator += 1) {
-		char *pathend = stpncpy(pathbuf, *iterator, sizeof (pathbuf));
-		size_t namemax;
-		DIR *dirp;
-		const struct dirent *entry;
-
-		/* Preparing path iteration */
-		if (pathend >= pathbuf + sizeof (pathbuf) - 1) {
-			errno = EOVERFLOW;
-			log_error("daemons_dir_iterate");
-			continue;
-		}
-		*pathend = '/';
-		pathend += 1;
-		namemax = pathbuf + sizeof (pathbuf) - 1 - pathend;
-
-		/* Open load directory */
-		if ((dirp = opendir(pathbuf)) == NULL) {
-			log_print("daemons_dir_iterate: Unable to open configuration directory \"%s\"\n",
-				pathbuf);
-			continue;
-		}
-
-		log_print("Iterating configuration directory '%s'\n", pathbuf);
-
-		/* Iterating load directory */
-		while ((entry = readdir(dirp)) != NULL) {
-			if ((entry->d_type == DT_REG
-				|| entry->d_type == DT_LNK)
-				&& entry->d_name[0] != '.') {
-				FILE *filep;
-
-				strncpy(pathend, entry->d_name, namemax);
-
-				/* Open the current daemon config file */
-				if ((filep = fopen(pathbuf, "r")) != NULL) {
-
-					callback(entry, filep);
-					fclose(filep);
-				} else {
-					log_error("fopen");
-				}
-
-				/* Closing path */
-				*pathend = '\0';
-			}
-		}
-
-		closedir(dirp);
+	/* Preparing path iteration */
+	if (pathend >= pathbuf + sizeof (pathbuf) - 1) {
+		errno = EOVERFLOW;
+		log_error("daemons_dir_iterate");
+		return;
 	}
+	*pathend = '/';
+	pathend += 1;
+	namemax = pathbuf + sizeof (pathbuf) - 1 - pathend;
+
+	/* Open load directory */
+	if ((dirp = opendir(pathbuf)) == NULL) {
+		log_print("daemons_dir_iterate: Unable to open configuration directory \"%s\"\n",
+			pathbuf);
+		return;
+	}
+
+	log_print("Iterating configuration directory '%s'\n", pathbuf);
+
+	/* Iterating load directory */
+	while ((entry = readdir(dirp)) != NULL) {
+		if ((entry->d_type == DT_REG
+			|| entry->d_type == DT_LNK)
+			&& entry->d_name[0] != '.') {
+			FILE *filep;
+
+			strncpy(pathend, entry->d_name, namemax);
+
+			/* Open the current daemon config file */
+			if ((filep = fopen(pathbuf, "r")) != NULL) {
+
+				callback(entry, filep);
+				fclose(filep);
+			} else {
+				log_error("fopen");
+			}
+
+			/* Closing path */
+			*pathend = '\0';
+		}
+	}
+
+	closedir(dirp);
 }
 
 static void
