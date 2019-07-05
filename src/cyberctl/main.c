@@ -7,43 +7,43 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <errno.h>
+#include <err.h>
 
 #include "config.h"
 
-static const char *cyberctlname;
-static const char *ctlpath = CONFIG_CONTROLLERS_DIRECTORY"/initctl";
+struct cyberctl_args {
+	const char *socket;
+	const char *newctl;
+	const char *when;
+	size_t whenlen;
+};
 
 static void
-cyberctl_usage(void) {
+cyberctl_usage(const char *cyberctlname) {
 
-	fprintf(stderr, "usage: %s [-t when] <start|stop|reload|end> daemon...\n"
-		"       %s [-t when] <poweroff|halt|reboot|suspend>\n"
-		"       %s cctl <name> [start|stop|reload|end|poweroff|halt|reboot|suspend]...\n",
+	fprintf(stderr, "usage: %s [-s socket] [-t when] <start|stop|reload|end> daemon...\n"
+		"       %s [-s socket] [-t when] <poweroff|halt|reboot|suspend>\n"
+		"       %s [-s socket] -c <name> [start|stop|reload|end|poweroff|halt|reboot|suspend|cctl]...\n",
 		cyberctlname, cyberctlname, cyberctlname);
 	exit(EXIT_FAILURE);
 }
 
-static void
-cyberctl_error(const char *name) {
-
-	fprintf(stderr, "%s: error %s: %s\n",
-		cyberctlname, name, strerror(errno));
-	exit(EXIT_FAILURE);
-}
-
 static int
-cyberctl_open(const char *path) {
+cyberctl_open(const char *name) {
 	int fd = socket(AF_LOCAL, SOCK_STREAM, 0);
 
 	if(fd != -1) {
 		struct sockaddr_un addr = { .sun_family = AF_LOCAL };
-		strncpy(addr.sun_path, path, sizeof(addr.sun_path));
+		if(snprintf(addr.sun_path, sizeof(addr.sun_path),
+			CONFIG_CONTROLLERS_DIRECTORY"/%s", name) >= sizeof(addr.sun_path)) {
+			errx(EXIT_FAILURE, "Socket pathname too long");
+		}
 
 		if(connect(fd, (const struct sockaddr *)&addr, sizeof(addr)) != 0) {
-			cyberctl_error("connect");
+			err(EXIT_FAILURE, "connect");
 		}
 	} else {
-		cyberctl_error("socket");
+		err(EXIT_FAILURE, "socket");
 	}
 
 	return fd;
@@ -115,8 +115,8 @@ cyberctl_system(int fd,
 
 static void
 cyberctl_cctl(int fd,
-	const char **restricted,
-	const char **end,
+	char **restricted,
+	char **end,
 	const char *name) {
 	size_t buffersize = 6 + (end - restricted) * 5 + strlen(name);
 	char buffer[buffersize];
@@ -129,14 +129,14 @@ cyberctl_cctl(int fd,
 			command = cyberctl_command_system(*restricted);
 		}
 
-		if(command == NULL && strcmp("cctl", *restricted) != 0) {
-			cyberctl_usage();
+		if(command != NULL || strcmp("cctl", *restricted) == 0) {
+			current = stpncpy(current, command, 4);
+			*current++ = ' ';
+		} else {
+			warnx("Unknown restriction '%s'", *restricted);
 		}
 
-		current = stpncpy(current, command, 4);
-		*current++ = ' ';
-
-		restricted += 1;
+		restricted++;
 	}
 
 	current[-1] = '\t';
@@ -151,61 +151,88 @@ cyberctl_is_integral(const char *str, const char **strend) {
 
 	while(*current != '\0'
 		&& isdigit(*current)) {
-		current += 1;
+		current++;
 	}
 	*strend = current;
 
 	return current != str && *current == '\0';
 }
 
+static struct cyberctl_args
+cyberctl_parse_args(int argc, char **argv) {
+	struct cyberctl_args args = {
+		.socket = "initctl",
+		.newctl = getenv("CYBERCTL_SOCKET"),
+		.when = "0"
+	};
+	int c;
+
+	while((c = getopt(argc, argv, ":s:t:c:")) != -1) {
+		switch(c) {
+		case 's':
+			args.socket = optarg;
+			break;
+		case 't':
+			args.when = optarg;
+			break;
+		case 'c':
+			if(*optarg != '\0' && *optarg != '.'
+				&& strchr(optarg, '/') == NULL) {
+				args.newctl = optarg;
+			} else {
+				errx(EXIT_FAILURE, "Invalid socket name '%s'", optarg);
+			}
+			break;
+		case '?':
+			warnx("Invalid option -%c", optopt);
+			cyberctl_usage(*argv);
+		case ':':
+			warnx("Missing option argument after -%c", optopt);
+			cyberctl_usage(*argv);
+		}
+	}
+
+	const char *whenend;
+	if(!cyberctl_is_integral(args.when, &whenend)) {
+		warnx("-t option expected to be an integer, found %s", args.when);
+		cyberctl_usage(*argv);
+	}
+
+	args.whenlen = whenend - args.when;
+
+	if(argc - optind == 0) {
+		cyberctl_usage(*argv);
+	}
+
+	return args;
+}
+
 int
 main(int argc,
-	const char **argv) {
-	const char **argpos = argv + 1;
-	const char **argend = argv + argc;
-	cyberctlname = *argv;
-
-	if(argpos == argend) {
-		cyberctl_usage();
-	}
-
-	const char *ctlenv = getenv("CYBERCTL_SOCKET");
-	if(ctlenv != NULL) {
-		ctlpath = ctlenv;
-	}
-
-	const char *when = "0";
-	const char *whenend;
-	if(strcmp("-t", *argpos) == 0
-		&& argpos + 2 < argend
-		&& cyberctl_is_integral(argpos[1], &whenend)) {
-		when = argpos[1];
-		argpos += 2;
-	} else {
-		whenend = when + 1;
-	}
-
-	int fd = cyberctl_open(ctlpath);
-	size_t whenlen = whenend - when;
+	char **argv) {
+	const struct cyberctl_args args = cyberctl_parse_args(argc, argv);
+	char **argpos = argv + optind, ** const argend = argv + argc;
+	int fd = cyberctl_open(args.socket);
 	const char *command;
 
-	if((command = cyberctl_command_daemon(*argpos)) != NULL) {
-		argpos += 1;
+	if(args.newctl != NULL) {
+		cyberctl_cctl(fd, argpos, argend, args.newctl);
+	} if((command = cyberctl_command_daemon(*argpos)) != NULL) {
+		argpos++;
 
 		while(argpos < argend) {
-			cyberctl_daemon(fd, command, when, whenlen, *argpos);
-			argpos += 1;
+			cyberctl_daemon(fd, command, args.when, args.whenlen, *argpos);
+			argpos++;
 		}
-	} else if(argend - argpos == 1
-		&&(command = cyberctl_command_system(*argpos)) != NULL) {
-
-		cyberctl_system(fd, command, when, whenlen);
-	} else if(strcmp("cctl", *argpos) == 0) {
-		argpos += 1;
-
-		cyberctl_cctl(fd, argpos + 1, argend, *argpos);
+	} else if((command = cyberctl_command_system(*argpos)) != NULL) {
+		if(argend - argpos == 1) {
+			cyberctl_system(fd, command, args.when, args.whenlen);
+		} else {
+			cyberctl_usage(*argv);
+		}
 	} else {
-		cyberctl_usage();
+		warnx("Unknown command '%s'", *argpos);
+		cyberctl_usage(*argv);
 	}
 
 	cyberctl_close(fd);
