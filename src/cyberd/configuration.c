@@ -95,10 +95,10 @@ configuration_fopenat(int dirfd, const char *path) {
 	if (fd >= 0) {
 		if ((filep = fdopen(fd, "r")) == NULL) {
 			close(fd);
-			log_error("fdopen");
+			log_error("configuration fdopen %s", path);
 		}
 	} else {
-		log_error("openat");
+		log_error("configuration openat %s", path);
 	}
 
 	return filep;
@@ -125,10 +125,10 @@ configuration_init(void) {
 		}
 
 		if (errno != 0) {
-			log_error("readdir");
+			log_error("configuration_init readdir");
 		}
 	} else {
-		log_error("opendir");
+		log_error("configuration_init opendir");
 	}
 }
 
@@ -164,10 +164,10 @@ configuration_reload(void) {
 		}
 
 		if (errno != 0) {
-			log_error("readdir");
+			log_error("configuration_reload readdir");
 		}
 	} else {
-		log_error("opendir");
+		log_error("configuration_reload opendir");
 	}
 
 	daemons_preorder_cleanup(olddaemons.root);

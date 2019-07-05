@@ -21,7 +21,7 @@ log_print(const char *format, ...);
  * @param message Message to prefix
  */
 void
-log_error(const char *message);
+log_error(const char *format, ...);
 
 /* LOG_H */
 #endif
