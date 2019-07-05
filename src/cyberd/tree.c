@@ -92,9 +92,9 @@ tree_node_insert(struct tree_node *root,
 				}
 			}
 		} else {
-			/* This should not happen, will certainely generate memory leaks
+			/* This should not happen, will certainly generate memory leaks
 			in most use case in the process */
-			log_print("Trying to reinsert element %lu\n", hash_field(node->element));
+			log_error("Trying to reinsert element %lu\n", hash_field(node->element));
 		}
 
 		root->height = max(tree_node_height(root->left), tree_node_height(root->right)) + 1;

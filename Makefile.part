@@ -1,33 +1,33 @@
 
-BUILDDIRS=$(BUILDDIR) $(BUILDDIR)/bin/
-INIT_SRC=$(wildcard src/*.c)\
-	$(wildcard src/daemon_conf/*.c)\
-	$(wildcard src/fde/*.c)
-INIT_BIN=build/bin/$(NAME)d
+CYBERD_SRC=$(wildcard src/cyberd/*.c)\
+	$(wildcard src/cyberd/daemon_conf/*.c)\
+	$(wildcard src/cyberd/fde/*.c)
+CYBERD_BIN=build/bin/$(NAME)d
 
-INITCTL_SRC=$(wildcard ctl/*.c)
-INITCTL_BIN=build/bin/$(NAME)ctl
+CYBERCTL_SRC=$(wildcard src/cyberctl/*.c)
+CYBERCTL_BIN=build/bin/$(NAME)ctl
 
-.PHONY: all clean
+.PHONY: all install clean
 
-all: $(BUILDDIRS) $(INIT_BIN) $(INITCTL_BIN)
+all: $(CYBERD_BIN) $(CYBERCTL_BIN)
 
 install: $(INSTALLDIRS) $(BIN)
 	cp -r $(BUILDDIR)/bin/* $(INSTALLBINDIR)/
-	cp -r ./man/* $(INSTALLMANDIR)/
+	cp -r $(BUILDDIR)/man/* $(INSTALLMANDIR)/
 
 clean:
-	rm -rf build/
+	rm -rf $(BUILDDIR)
 
-$(BUILDDIRS):
-	mkdir $@
+$(BUILDDIR):
+	mkdir $@ $@/bin
+	cp -r ./man $@/
 
 $(INSTALLDIRS):
 	mkdir $@
 
-$(INIT_BIN): $(INIT_SRC)
-	$(CC) $(CFLAGS) -o $@ $^
+$(CYBERD_BIN): $(CYBERD_SRC) $(BUILDDIR)
+	$(CC) -I./src $(CFLAGS) -o $@ $(CYBERD_SRC)
 
-$(INITCTL_BIN): $(INITCTL_SRC)
-	$(CC) $(CFLAGS) -o $@ $^
+$(CYBERCTL_BIN): $(CYBERCTL_SRC) $(BUILDDIR)
+	$(CC) -I./src $(CFLAGS) -o $@ $(CYBERCTL_SRC)
 

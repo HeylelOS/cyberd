@@ -1,17 +1,14 @@
 #!/bin/sh
 
-for arg in $@
+CONFIG_DEBUG=1
+
+while getopts h opt
 do
-	if echo "$arg" | grep -Eq '[A-Z]+=.+'
-	then
-		export "$arg"
-	else
-		case `echo "$arg" | cut -d'=' -f1` in
-		'-h' | '--help')
-			cat <<EOF
+	case $opt in
+	h) cat <<EOF
 \`configure' configures this package to adapt to many kinds of systems.
 
-Usage: ./configure [OPTION]... [VAR=VALUE]...
+Usage: ./configure [-h] [-r|-d] [VAR=VALUE]...
 
 To assign environment variables (e.g., CC, CFLAGS...), specify them as
 VAR=VALUE.  See below for descriptions of some of the useful variables.
@@ -19,71 +16,46 @@ VAR=VALUE.  See below for descriptions of some of the useful variables.
 Defaults for the options are specified in brackets.
 
 Configuration:
-  -h, --help              display this help and exit
-
-Installation directories:
-  --prefix=PREFIX         install architecture-independent files in PREFIX
-                          [/usr/local]
-
-By default, \`make install' will install all the files in
-\`/usr/local/bin', \`/usr/local/lib' etc.  You can specify
-an installation prefix other than \`/usr/local' using \`--prefix',
-for instance \`--prefix=\$HOME'.
-
-For better control, use the options below.
-
-Fine tuning of the installation directories:
-  --bindir=DIR               user executables [PREFIX/bin]
-  --mandir=DIR               manpages documentation [PREFIX/man]
+  -h                      display this help and exit
 
 Optional Features:
-  --debug                    configure a debug build
+  -d                      configure a debug build (default)
+  -r                      configure a release build
 
 Some influential environment variables:
-  NAME            cyberd/cyberctl executable name, default cyber
-  CC              C compiler command, default in clang gcc cc
-  CFLAGS          C compiler flags, default -O3 -Wall -fPIC
-  LDFLAGS         linker flags, e.g. -L<lib dir> if you have libraries in a
-                  nonstandard directory <lib dir>.
-  BUILDDIR        where the binaries and documentations will be built, default ./build
+  NAME            cyber{d,ctl} executables name [cyber]
+
+  CC              C compiler command [cc]
+  CFLAGS          C compiler flags [-O3 -Wall -fPIC] when -r specified, [-g -Wall -fPIC] else
+  LDFLAGS         linker flags []
+
+  DAEMONCONFS     where will daemon configurations be set [/etc/daemons] when -r specified, [$PWD/test/cyberd/daemons] else
+  IPCSOCKETS      where will IPC sockets be created [/var/init] when -r specified, [$PWD/test/cyberd] else
+
+  PREFIX          where to install files [/usr/local]
+  BINDIR          where to install executables [\$PREFIX/bin]
+  MANDIR          where to install manpages [\$PREFIX/man]
+  BUILDDIR        where the binaries and documentations will be built [./build]
 
 Use these variables to override the choices made by \`configure' or to help
 it to find libraries and programs with nonstandard names/locations.
 
 Report bugs to the package provider.
 EOF
-			exit 0
-			;;
-		'--prefix')
-			PREFIX=`echo "$arg" | cut -d'=' -f2-`
-			;;
-		'--bindir')
-			BINDIR=`echo "$arg" | cut -d'=' -f2-`
-			;;
-		'--mandir')
-			MANDIR=`echo "$arg" | cut -d'=' -f2-`
-			;;
-		'--debug')
-			CONFIG_DEBUG=1
-			;;
-		*)
-			echo "Unknown option: $arg"
-			;;
-		esac
-	fi
+		exit 2 ;;
+	r) unset CONFIG_DEBUG ;;
+	d) CONFIG_DEBUG=1 ;;
+	?) echo "Unknown option: $opt" ;;
+	esac
 done
 
-[ -z "$PREFIX" ] && PREFIX='/usr/local'
-[ -z "$BINDIR" ] && BINDIR="$PREFIX/bin"
-[ -z "$MANDIR" ] && MANDIR="$PREFIX/man"
+shift $((OPTIND - 1))
+[ ! -z "$*" ] && export $*
 
-# NAME
+# Generic
 [ -z "$NAME" ] && NAME='cyber'
 
-# BUILDDIR
-[ -z "$BUILDDIR" ] && BUILDDIR='./build'
-
-# CC
+# Compilation
 if [ -z "$CC" ]
 then
 	for CC in clang gcc cc
@@ -93,25 +65,44 @@ fi
 
 if [ ! -z "$CC" ]
 then echo "Using C compiler '$CC'"
-else
-	echo "Unable to find C compiler"
-	exit 1
+else echo "Unable to find C compiler" ; exit 1
 fi
 
-# CFLAGS
 if [ -z "$CFLAGS" ]
 then
-	CFLAGS='-O3 -Wall -fPIC'
+	if [ ! -z "$CONFIG_DEBUG" ]
+	then CFLAGS='-g -Wall -fPIC'
+	else CFLAGS='-O3 -Wall -fPIC'
+	fi
 fi
-
+[ ! -z "$CONFIG_DEBUG" ] && CFLAGS="$CFLAGS -DCONFIG_DEBUG"
 echo "Using C flags '$CFLAGS'"
 
-# LDFLAGS
-# None default
+echo "Using Linker flags: '$LDFLAGS'"
 
-echo "Using Linker flags ldflags: '$LDFLAGS'"
+if [ -z "$DAEMONCONFS" ]
+then
+	if [ ! -z "$CONFIG_DEBUG" ]
+	then DAEMONCONFS="$PWD/test/cyberd/daemons"
+	else DAEMONCONFS='/etc/daemons'
+	fi
+fi
 
-cat <<EOF > Makefile
+if [ -z "$IPCSOCKETS" ]
+then
+	if [ ! -z "$CONFIG_DEBUG" ]
+	then IPCSOCKETS="$PWD/test/cyberd"
+	else IPCSOCKETS='/var/init'
+	fi
+fi
+
+# Install
+[ -z "$PREFIX" ] && PREFIX='/usr/local'
+[ -z "$BINDIR" ] && BINDIR="$PREFIX/bin"
+[ -z "$MANDIR" ] && MANDIR="$PREFIX/man"
+[ -z "$BUILDDIR" ] && BUILDDIR='./build'
+
+cat - Makefile.part <<EOF > Makefile
 NAME=$NAME
 
 CC=$CC
@@ -125,39 +116,17 @@ INSTALLMANDIR=$MANDIR
 INSTALLDIRS=\$(INSTALLBINDIR) \$(INSTALLMANDIR)
 EOF
 
-# CONFIG_DEBUG
-if [ ! -z "$CONFIG_DEBUG" ]
-then
-	echo 'CFLAGS += -DCONFIG_DEBUG' >> Makefile
-fi
-
-cat Makefile.part >> Makefile
-
-cat <<EOF > config.h
+cat <<EOF > src/config.h
 #ifndef CONFIG_H
 #define CONFIG_H
-
-#ifndef UNUSED
-#define UNUSED __attribute__((unused))
-#endif
 
 #ifdef CONFIG_DEBUG
 #define CONFIG_STDOUT_LOG 1
 #define CONFIG_FULL_CLEANUP 1
-#define CONFIG_CONTROLLERS_DIRECTORY "./test"
-
-static const char *configurationdirs[] UNUSED = {
-	"./test/daemons"
-};
-#else
-#define CONFIG_CONTROLLERS_DIRECTORY "/var/init"
-
-static const char *configurationdirs[] UNUSED = {
-	"/etc/daemons"
-};
 #endif
 
-#define CONFIG_INITCTL_PATH CONFIG_CONTROLLERS_DIRECTORY"/initctl"
+#define CONFIG_DAEMONCONFS_DIRECTORY "$DAEMONCONFS"
+#define CONFIG_CONTROLLERS_DIRECTORY "$IPCSOCKETS"
 
 #define CONFIG_DEFAULT_UMASK 022
 
@@ -165,6 +134,7 @@ static const char *configurationdirs[] UNUSED = {
 #define CONFIG_MAX_ACCEPTOR_LEN 255
 
 #define CONFIG_READ_BUFFER_SIZE 512
+#define CONFIG_LOG_ERROR_BUFFER_SIZE 128
 
 /* CONFIG_H */
 #endif

@@ -5,7 +5,7 @@
 #include "signals.h"
 #include "log.h"
 
-#include "../config.h"
+#include "config.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,6 +15,7 @@
 #include <sys/stat.h> /* umask */
 #include <sys/reboot.h> /* reboot */
 #include <errno.h>
+#include <err.h>
 
 #ifndef NORETURN
 #define NORETURN __attribute__((noreturn))
@@ -35,9 +36,9 @@ bool running;
  * Should we poweroff, halt, reboot?
  */
 static enum {
-	ENDING_POWEROFF = 0,
-	ENDING_HALT = 1,
-	ENDING_REBOOT = 2
+	ENDING_POWEROFF,
+	ENDING_HALT,
+	ENDING_REBOOT
 } ending;
 
 /**
@@ -50,13 +51,11 @@ begin(void) {
 
 #ifndef CONFIG_DEBUG
 	if(getpid() != 1) {
-		fprintf(stderr, "cyberd must be pid 1\n");
-		exit(EXIT_FAILURE);
+		err(EXIT_FAILURE, "cyberd must be pid 1\n");
 	}
 
 	if (geteuid() != 0) {
-		fprintf(stderr, "cyberd must be run as root\n");
-		exit(EXIT_FAILURE);
+		err(EXIT_FAILURE, "cyberd must be pid 1\n");
 	}
 #endif
 }
@@ -154,10 +153,10 @@ suspend(void) {
 
 int
 main(int argc,
-	const char **argv) {
+	char **argv) {
 	/* Environnement initialization, order matters */
 	begin();
-	log_init();
+	log_init(*argv);
 	signals_init();
 	spawns_init();
 	scheduler_init();
@@ -184,7 +183,7 @@ main(int argc,
 		fds = pselect(fds,
 			readfdsp, writefdsp, errorfdsp,
 			timeoutp,
-			&signals_selmask);
+			signals_sigset());
 
 		if(fds > 0) {
 			/* Fdset I/O */

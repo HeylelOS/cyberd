@@ -1,5 +1,4 @@
 /build
-/build/**
-/test/initctl
+/test/cyberd/initctl
 /Makefile
-/config.h
+/src/config.h

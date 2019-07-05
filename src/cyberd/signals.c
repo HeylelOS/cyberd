@@ -7,7 +7,7 @@
 #include <sys/wait.h>
 #include <stdbool.h>
 
-const sigset_t signals_selmask;
+static sigset_t initsigset;
 
 static void
 sigterm_handler(int sig) {
@@ -43,13 +43,11 @@ sigchld_handler(int sig) {
 
 void
 signals_init(void) {
-	/* const qualifier only for external signature */
-	sigset_t *set = (sigset_t *)&signals_selmask;
 	struct sigaction action;
 
 	/* Define process' blocked signals */
-	sigfillset(set);
-	sigprocmask(SIG_SETMASK, set, NULL);
+	sigfillset(&initsigset);
+	sigprocmask(SIG_SETMASK, &initsigset, NULL);
 
 	/* Init signal handlers */
 	sigfillset(&action.sa_mask);
@@ -66,10 +64,16 @@ signals_init(void) {
 	sigaction(SIGCHLD, &action, NULL);
 
 	/* Define pselect's non blocked signals */
-	sigdelset(set, SIGTERM);
-	sigdelset(set, SIGINT);
-	sigdelset(set, SIGHUP);
-	sigdelset(set, SIGCHLD);
+	sigdelset(&initsigset, SIGTERM);
+	sigdelset(&initsigset, SIGINT);
+	sigdelset(&initsigset, SIGHUP);
+	sigdelset(&initsigset, SIGCHLD);
+}
+
+const sigset_t *
+signals_sigset(void) {
+
+	return &initsigset;
 }
 
 void
