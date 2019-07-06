@@ -51,11 +51,11 @@ begin(void) {
 
 #ifndef CONFIG_DEBUG
 	if(getpid() != 1) {
-		err(EXIT_FAILURE, "cyberd must be pid 1");
+		errx(EXIT_FAILURE, "Must be run as pid 1");
 	}
 
 	if (geteuid() != 0) {
-		err(EXIT_FAILURE, "cyberd must be run as root");
+		errx(EXIT_FAILURE, "Must be run as root");
 	}
 
 	DIR *dirp = opendir("/proc/1/fd");
@@ -71,9 +71,13 @@ begin(void) {
 			}
 		}
 
+		if(errno != 0) {
+			warn("Unable to read entry when removing file descriptors");
+		}
+
 		closedir(dirp);
 	} else {
-		warnx("Unable to close init file descriptor, is /proc mounted?");
+		warn("Unable to close init file descriptors, is /proc mounted?");
 	}
 #endif
 }

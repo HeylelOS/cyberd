@@ -5,6 +5,10 @@
 #include <stdbool.h>
 #include <spawn.h>
 
+#define DAEMON_STARTS_AT(d, m) (((d)->conf.startmask & (m)) != 0)
+#define DAEMON_START_LOAD (1 << 0)
+#define DAEMON_START_RELOAD (1 << 1)
+
 /** Structure which contains configurations for a daemon */
 struct daemon_conf {
 	char *path; /**< Path of the executable file */
@@ -14,10 +18,6 @@ struct daemon_conf {
 
 	posix_spawn_file_actions_t file_actions;
 	posix_spawnattr_t attr;
-
-#define DAEMON_STARTS_AT(d, m) (((d)->conf.startmask & (m)) != 0)
-#define DAEMON_START_LOAD (1 << 0)
-#define DAEMON_START_RELOAD (1 << 1)
 
 	int startmask; /**< Bitmask holding when a daemon may want to start */
 };

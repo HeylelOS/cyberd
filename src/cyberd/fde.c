@@ -58,7 +58,7 @@ struct fde *
 fde_create_controller(const struct fde *acceptor) {
 	struct fde *fde = NULL;
 	struct sockaddr_un addr;
-	socklen_t len;
+	socklen_t len = sizeof(addr);
 	int fd = accept(acceptor->fd, (struct sockaddr *)&addr, &len);
 
 	if(fd != -1) {
