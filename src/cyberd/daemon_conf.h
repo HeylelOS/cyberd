@@ -14,12 +14,15 @@ struct daemon_conf {
 	char *path; /**< Path of the executable file */
 	char **arguments; /**< Command line arguments, including process name */
 	char **environment; /**< Command line arguments, including process name */
+	char *wd; /**< Working directory of the process */
 
 	int sigend; /**< Signal used to stop the process, default SIGTERM */
 	int sigreload; /**< Signal used to reload the process configuration, default SIGHUP */
 
 	uid_t uid; /**< User-id the process wil be executed with */
 	gid_t gid; /**< Group-id the process will be executed with */
+
+	mode_t umask; /**< umask of the daemon */
 
 	int startmask; /**< Bitmask holding when a daemon may want to start */
 };
