@@ -1,6 +1,5 @@
 
 CYBERD_SRC=$(wildcard src/cyberd/*.c)\
-	$(wildcard src/cyberd/daemon_conf/*.c)\
 	$(wildcard src/cyberd/fde/*.c)
 CYBERD_BIN=build/bin/$(NAME)d
 
@@ -26,8 +25,8 @@ $(INSTALLDIRS):
 	mkdir $@
 
 $(CYBERD_BIN): $(CYBERD_SRC) $(BUILDDIR)
-	$(CC) -I./src $(CFLAGS) -o $@ $(CYBERD_SRC)
+	$(CC) -I./src $(CFLAGS) $(LDFLAGS) -o $@ $(CYBERD_SRC)
 
 $(CYBERCTL_BIN): $(CYBERCTL_SRC) $(BUILDDIR)
-	$(CC) -I./src $(CFLAGS) -o $@ $(CYBERCTL_SRC)
+	$(CC) -I./src $(CFLAGS) $(LDFLAGS) -o $@ $(CYBERCTL_SRC)
 

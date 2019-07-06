@@ -44,7 +44,7 @@ configuration_daemons_load(const char *name, FILE *filep) {
 
 		tree_insert(&daemons, node);
 
-		log_print("Loaded '%s'\n", daemon->name);
+		log_print("Loaded '%s'", daemon->name);
 
 		if(DAEMON_STARTS_AT(daemon, DAEMON_START_LOAD)) {
 			daemon_start(daemon);
@@ -73,13 +73,13 @@ configuration_daemons_reload(const char *name, FILE *filep, struct tree *olddaem
 
 			tree_insert(&daemons, node);
 
-			log_print("Reloaded '%s'\n", daemon->name);
+			log_print("Reloaded '%s'", daemon->name);
 
 			if(DAEMON_STARTS_AT(daemon, DAEMON_START_RELOAD)) {
 				daemon_start(daemon);
 			}
 		} else {
-			log_print("Error while reloading '%s'\n", daemon->name);
+			log_print("Error while reloading '%s'", daemon->name);
 
 			daemon_destroy(daemon);
 			tree_node_destroy(node);
@@ -108,7 +108,7 @@ void
 configuration_init(void) {
 	DIR *dirp;
 
-	log_print("Configurating...\n");
+	log_print("Configurating...");
 	tree_init(&daemons, daemons_hash_field);
 
 	if((dirp = opendir(CONFIG_DAEMONCONFS_DIRECTORY)) != NULL) {

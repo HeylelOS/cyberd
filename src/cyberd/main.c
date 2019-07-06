@@ -51,29 +51,11 @@ begin(void) {
 
 #ifndef CONFIG_DEBUG
 	if(getpid() != 1) {
-		err(EXIT_FAILURE, "cyberd must be pid 1");
+		errx(EXIT_FAILURE, "Must be run as pid 1");
 	}
 
-	if (geteuid() != 0) {
-		err(EXIT_FAILURE, "cyberd must be run as root");
-	}
-
-	DIR *dirp = opendir("/proc/1/fd");
-	if(dirp != NULL) {
-		struct dirent *entry;
-
-		while((errno = 0, entry = readdir(dirp)) != NULL) {
-			char *end;
-			unsigned long fd = strtoul(entry->d_name, &end, 10);
-
-			if(*end == '\0') {
-				close((int)fd);
-			}
-		}
-
-		closedir(dirp);
-	} else {
-		warnx("Unable to close init file descriptor, is /proc mounted?");
+	if(setuid(0) != 0) {
+		errx(EXIT_FAILURE, "Must be run as root");
 	}
 #endif
 }
@@ -90,7 +72,7 @@ end(void) {
 		.tv_nsec = 0
 	}, rem;
 
-	log_print("Ending...\n");
+	log_print("Ending...");
 
 	/* Notify spawns they should stop */
 	spawns_stop();
@@ -165,7 +147,7 @@ suspend(void) {
 	}
 #else
 #warning "Unsupported suspend operation will not be available"
-	log_print("Suspend not available on this operating system\n");
+	log_print("Suspend not available on this operating system");
 #endif
 }
 
@@ -182,7 +164,7 @@ main(int argc,
 	configuration_init();
 	running = true;
 
-	log_print("Entering main loop...\n");
+	log_print("Entering main loop...");
 	while(running) {
 		int fds;
 		fd_set *readfdsp, *writefdsp, *errorfdsp;
@@ -235,7 +217,7 @@ main(int argc,
 						running = false;
 					}
 				} else {
-					log_print("Unknown scheduled action received\n");
+					log_print("Unknown scheduled action received");
 				} break;
 			}
 		} else if(errno != EINTR) {

@@ -71,10 +71,10 @@ spawns_end(void) {
 		if(daemon != NULL) {
 			daemon->state = DAEMON_STOPPED;
 
-			log_print("Daemon %s (pid: %d) force-ended with status: %d\n",
+			log_print("Daemon %s (pid: %d) force-ended with status: %d",
 				daemon->name, child, status);
 		} else {
-			log_print("Orphan process %d force-ended\n", child);
+			log_print("Orphan process %d force-ended", child);
 		}
 	}
 }

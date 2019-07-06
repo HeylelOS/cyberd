@@ -33,10 +33,10 @@ sigchld_handler(int sig) {
 		if(daemon != NULL) {
 			daemon->state = DAEMON_STOPPED;
 
-			log_print("Daemon %s (pid: %d) terminated with status: %d\n",
+			log_print("Daemon %s (pid: %d) terminated with status: %d",
 				daemon->name, child, status);
 		} else {
-			log_print("Orphan process %d terminated\n", child);
+			log_print("Orphan process %d terminated", child);
 		}
 	}
 }

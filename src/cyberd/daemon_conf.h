@@ -3,21 +3,22 @@
 
 #include <stdio.h>
 #include <stdbool.h>
-#include <spawn.h>
+#include <sys/types.h>
+
+#define DAEMON_STARTS_AT(d, m) (((d)->conf.startmask & (m)) != 0)
+#define DAEMON_START_LOAD (1 << 0)
+#define DAEMON_START_RELOAD (1 << 1)
 
 /** Structure which contains configurations for a daemon */
 struct daemon_conf {
 	char *path; /**< Path of the executable file */
 	char **arguments; /**< Command line arguments, including process name */
+
 	int sigend; /**< Signal used to stop the process, default SIGTERM */
 	int sigreload; /**< Signal used to reload the process configuration, default SIGHUP */
 
-	posix_spawn_file_actions_t file_actions;
-	posix_spawnattr_t attr;
-
-#define DAEMON_STARTS_AT(d, m) (((d)->conf.startmask & (m)) != 0)
-#define DAEMON_START_LOAD (1 << 0)
-#define DAEMON_START_RELOAD (1 << 1)
+	uid_t uid; /**< User-id the process wil be executed with */
+	gid_t gid; /**< Group-id the process will be executed with */
 
 	int startmask; /**< Bitmask holding when a daemon may want to start */
 };

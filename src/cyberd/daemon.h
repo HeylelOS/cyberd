@@ -24,7 +24,7 @@ struct daemon {
 	char *name; /**< Daemon's name */
 	enum daemon_state state; /**< Daemon's running state */
 
-	hash_t namehash; /**< Key for tree index by name */
+	hash_t namehash; /**< Key for tree index by name (used in configuration.c) */
 	pid_t pid; /**< Key for tree index by pid (used in spawns.c) */
 
 	struct daemon_conf conf; /**< Daemon configuration */
