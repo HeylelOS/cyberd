@@ -9,6 +9,7 @@
 #include <signal.h>
 #include <sys/time.h>
 #include <sys/resource.h>
+#include <sys/stat.h>
 #include <dirent.h>
 #include <errno.h>
 #include <err.h>
@@ -117,6 +118,8 @@ daemon_child_envp(struct daemon *daemon) {
 
 static void
 daemon_child_setup(struct daemon *daemon) {
+
+	umask(daemon->conf.umask);
 
 	if (daemon_child_setup_fds(daemon) == 0
 		&& daemon_child_setup_ids(daemon) == 0) {
