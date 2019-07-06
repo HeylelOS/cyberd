@@ -6,6 +6,33 @@
 #include <string.h>
 #include <unistd.h>
 #include <signal.h>
+#include <errno.h>
+
+static int
+daemon_spawn(struct daemon *daemon) {
+	extern char **environ;
+	char **arguments = daemon->conf.arguments;
+	int errcode;
+
+	if (arguments == NULL) {
+		arguments = alloca(2 * sizeof (char *));
+		arguments[0] = daemon->name;
+		arguments[1] = NULL;
+	}
+
+	if ((errcode = posix_spawn(&daemon->pid, daemon->conf.path,
+		&daemon->conf.file_actions, &daemon->conf.attr,
+		arguments, environ)) == 0) {
+
+		daemon->state = DAEMON_RUNNING;
+		spawns_record(daemon);
+
+		return 0;
+	} else {
+		errno = errcode;
+		return -1;
+	}
+}
 
 struct daemon *
 daemon_create(const char *name) {
@@ -44,31 +71,13 @@ daemon_start(struct daemon *daemon) {
 	case DAEMON_RUNNING:
 		log_print("Daemon start '%s': Already started\n", daemon->name);
 		break;
-	case DAEMON_STOPPED: {
-		extern char **environ;
-		char **arguments = daemon->conf.arguments;
-		int errcode;
-
-		if (arguments == NULL) {
-			arguments = alloca(2 * sizeof (char *));
-			arguments[0] = daemon->name;
-			arguments[1] = NULL;
-		}
-
-		if ((errcode = posix_spawn(&daemon->pid, daemon->conf.path,
-			&daemon->conf.file_actions, &daemon->conf.attr,
-			arguments, environ)) == 0) {
-
-			daemon->state = DAEMON_RUNNING;
-			spawns_record(daemon);
-
+	case DAEMON_STOPPED:
+		if (daemon_spawn(daemon) == 0) {
 			log_print("Daemon start '%s': Started with pid: %d\n",
 				daemon->name, daemon->pid);
 		} else {
-			log_print("Daemon start '%s': Start failed: %s\n",
-				daemon->name, strerror(errcode));
+			log_error("Daemon start '%s': Start failed", daemon->name);
 		}
-	} break;
 	case DAEMON_STOPPING:
 		log_print("Daemon start '%s': Is stopping\n", daemon->name);
 		break;
