@@ -164,7 +164,7 @@ main(int argc,
 	configuration_init();
 	running = true;
 
-	log_print("Entering main loop...");
+	log_print("Running...");
 	while(running) {
 		int fds;
 		fd_set *readfdsp, *writefdsp, *errorfdsp;

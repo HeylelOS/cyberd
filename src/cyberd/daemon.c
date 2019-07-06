@@ -106,10 +106,8 @@ daemon_child_argv(struct daemon *daemon) {
 static char **
 daemon_child_envp(struct daemon *daemon) {
 
-	if(clearenv() == 0) {
-		extern char **environ;
-
-		return environ;
+	if(daemon->conf.environment != NULL) {
+		return daemon->conf.environment;
 	} else {
 		static char *emptyenvp[] = { NULL };
 

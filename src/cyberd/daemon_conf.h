@@ -13,6 +13,7 @@
 struct daemon_conf {
 	char *path; /**< Path of the executable file */
 	char **arguments; /**< Command line arguments, including process name */
+	char **environment; /**< Command line arguments, including process name */
 
 	int sigend; /**< Signal used to stop the process, default SIGTERM */
 	int sigreload; /**< Signal used to reload the process configuration, default SIGHUP */
