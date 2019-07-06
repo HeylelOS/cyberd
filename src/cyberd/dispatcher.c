@@ -74,7 +74,7 @@ dispatcher_init(void) {
 		if (acceptor != NULL) {
 			dispatcher_insert(acceptor);
 		} else {
-			log_print("dispatcher_init: Unable to create main 'initctl' acceptor\n");
+			log_print("dispatcher_init: Unable to create main 'initctl' acceptor");
 		}
 	} else {
 		log_error("dispatcher_init: Unable to create controllers directory '"CONFIG_CONTROLLERS_DIRECTORY"'");
@@ -161,7 +161,7 @@ dispatcher_handle_controller(struct fde *controller) {
 					if (acceptor != NULL) {
 						dispatcher_insert(acceptor);
 					} else {
-						log_print("dispatcher_handle_controller: Unable to create '%s' acceptor\n",
+						log_print("dispatcher_handle_controller: Unable to create '%s' acceptor",
 							control->cctl.name.value);
 					}
 				} else {
@@ -175,7 +175,7 @@ dispatcher_handle_controller(struct fde *controller) {
 							&& (activity.daemon = configuration_daemon_find(control->planified.daemonhash)) != NULL)) {
 						scheduler_schedule(&activity);
 					} else {
-						log_print("dispatcher_handle_controller: Unable to find daemon\n");
+						log_print("dispatcher_handle_controller: Unable to find daemon");
 					}
 				}
 			}
