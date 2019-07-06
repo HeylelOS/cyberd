@@ -1,6 +1,5 @@
 
 CYBERD_SRC=$(wildcard src/cyberd/*.c)\
-	$(wildcard src/cyberd/daemon_conf/*.c)\
 	$(wildcard src/cyberd/fde/*.c)
 CYBERD_BIN=build/bin/$(NAME)d
 
