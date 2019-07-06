@@ -14,9 +14,10 @@
  * Section in the configuration file
  */
 enum daemon_conf_section {
-	SECTION_UNKNOWN,
 	SECTION_GENERAL,
-	SECTION_START
+	SECTION_ENVIRONMENT,
+	SECTION_START,
+	SECTION_UNKNOWN,
 };
 
 /**
@@ -162,6 +163,58 @@ daemon_conf_parse_general(struct daemon_conf *conf,
 }
 
 /**
+ * Adds an element to the daemon environment
+ * @param conf Configuration being parsed
+ * @param string String of the form <key>=<value>
+ * @param envcapp In-Out value correspondig to the capacity of conf->environment
+ * @return 0 on success or unknown key, -1 else
+ */
+static int
+daemon_conf_parse_environment(struct daemon_conf *conf, const char *string, size_t *envcapp) {
+
+	if (strchr(string, '=') != NULL) {
+		size_t end;
+
+		if (conf->environment == NULL) {
+			end = 0;
+			*envcapp = 16;
+			conf->environment = malloc(sizeof (*conf->environment) * *envcapp);
+
+			if (conf->environment == NULL) {
+				*envcapp = 0;
+				return -1;
+			}
+		} else {
+			char **env = conf->environment;
+			while (*env != NULL) {
+				env++;
+			}
+			end = env - conf->environment;
+
+			if (*envcapp == end) {
+				char **newenvironment = realloc(conf->environment, sizeof (*conf->environment) * *envcapp * 2);
+
+				if (newenvironment == NULL) {
+					return -1;
+				}
+
+				conf->environment = newenvironment;
+				*envcapp *= 2;
+			}
+		}
+
+		conf->environment[end] = strdup(string);
+		conf->environment[end + 1] = NULL;
+
+		return 0;
+	} else {
+		log_print("daemon_conf_parse: Environment variable must be of type <key>=<value>, found '%s'", string);
+	}
+
+	return -1;
+}
+
+/**
  * Parses an element of the start section
  * @param conf Configuration being parsed
  * @key Key of the parameters value
@@ -188,6 +241,7 @@ daemon_conf_init(struct daemon_conf *conf) {
 
 	conf->path = NULL;
 	conf->arguments = NULL;
+	conf->environment = NULL;
 
 	conf->sigend = SIGTERM;
 	conf->sigreload = SIGHUP;
@@ -204,16 +258,27 @@ daemon_conf_deinit(struct daemon_conf *conf) {
 
 	free(conf->path);
 	free(conf->arguments);
+
+	if (conf->environment != NULL) {
+		char **env = conf->environment;
+
+		while (*env != NULL) {
+			free(*env);
+			env++;
+		}
+
+		free(conf->environment);
+	}
 }
 
 bool
 daemon_conf_parse(struct daemon_conf *conf,
 	FILE *filep) {
 	enum daemon_conf_section section = SECTION_GENERAL;
-	ssize_t length;
 	char *line = NULL;
-	size_t linecap = 0;
+	size_t linecap = 0, envcap = 0;
 	int errors = 0;
+	ssize_t length;
 
 	/* Reading lines */
 	while ((length = getline(&line, &linecap, filep)) != -1) {
@@ -226,6 +291,8 @@ daemon_conf_parse(struct daemon_conf *conf,
 
 			if (strcmp(line, "@general") == 0) {
 				section = SECTION_GENERAL;
+			} else if (strcmp(line, "@environment") == 0) {
+				section = SECTION_ENVIRONMENT;
 			} else if (strcmp(line, "@start") == 0) {
 				section = SECTION_START;
 			} else {
@@ -234,16 +301,19 @@ daemon_conf_parse(struct daemon_conf *conf,
 		} else if (*line != '\0'
 			&& *line != '#') {
 			char *value = line;
-			strsep(&value, "=");
 
 			switch (section) {
 			case SECTION_GENERAL:
-				if (daemon_conf_parse_general(conf, line, value) != 0) {
+				if (daemon_conf_parse_general(conf, strsep(&value, "="), value) != 0) {
 					errors++;
 				}
 				break;
+			case SECTION_ENVIRONMENT:
+				if (daemon_conf_parse_environment(conf, value, &envcap) != 0) {
+					errors++;
+				}
 			case SECTION_START:
-				if (daemon_conf_parse_start(conf, line, value) != 0) {
+				if (daemon_conf_parse_start(conf, strsep(&value, "="), value) != 0) {
 					errors++;
 				}
 				break;
