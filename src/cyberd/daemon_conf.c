@@ -1,6 +1,8 @@
 #include "daemon_conf.h"
 #include "log.h"
 
+#include "config.h"
+
 #include <stdlib.h>
 #include <signal.h>
 #include <string.h>
@@ -139,6 +141,13 @@ daemon_conf_parse_general(struct daemon_conf *conf,
 		if (strcmp(key, "path") == 0) {
 			free(conf->path);
 			conf->path = strdup(value);
+		} else if (strcmp(key, "workdir") == 0) {
+			if (*value == '/') {
+				free(conf->wd);
+				conf->wd = strdup(value);
+			} else {
+				return -1;
+			}
 		} else if (strcmp(key, "user") == 0) {
 			if (daemon_conf_parse_general_uid(value, &conf->uid) == -1) {
 				return -1;
@@ -147,6 +156,16 @@ daemon_conf_parse_general(struct daemon_conf *conf,
 			if (daemon_conf_parse_general_gid(value, &conf->gid) == -1) {
 				return -1;
 			}
+		} else if (strcmp(key, "umask") == 0) {
+			char *valueend;
+			unsigned long cmask = strtoul(value, &valueend, 8);
+
+			if (*value == '\0' || *valueend != '\0') {
+				return -1;
+			}
+
+			conf->umask = cmask & 0x1FF;
+
 		} else if (strcmp(key, "arguments") == 0) {
 			char **arguments = daemon_conf_parse_general_expand_arguments(value);
 
@@ -242,12 +261,15 @@ daemon_conf_init(struct daemon_conf *conf) {
 	conf->path = NULL;
 	conf->arguments = NULL;
 	conf->environment = NULL;
+	conf->wd = NULL;
 
 	conf->sigend = SIGTERM;
 	conf->sigreload = SIGHUP;
 
 	conf->uid = getuid();
 	conf->gid = getgid();
+
+	conf->umask = CONFIG_DEFAULT_UMASK;
 
 	/* Zero'ing startmask */
 	conf->startmask = 0;
@@ -258,7 +280,6 @@ daemon_conf_deinit(struct daemon_conf *conf) {
 
 	free(conf->path);
 	free(conf->arguments);
-
 	if (conf->environment != NULL) {
 		char **env = conf->environment;
 
@@ -269,6 +290,7 @@ daemon_conf_deinit(struct daemon_conf *conf) {
 
 		free(conf->environment);
 	}
+	free(conf->wd);
 }
 
 bool
