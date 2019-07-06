@@ -4,6 +4,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <unistd.h>
+#include <time.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <errno.h>
@@ -14,15 +15,14 @@
 struct cyberctl_args {
 	const char *socket;
 	const char *newctl;
-	const char *when;
-	size_t whenlen;
+	time_t when;
 };
 
 static void
 cyberctl_usage(const char *cyberctlname) {
 
-	fprintf(stderr, "usage: %s [-s socket] [-t when] <start|stop|reload|end> daemon...\n"
-		"       %s [-s socket] [-t when] <poweroff|halt|reboot|suspend>\n"
+	fprintf(stderr, "usage: %s [-s socket] [-n] [-t when] <start|stop|reload|end> daemon...\n"
+		"       %s [-s socket] [-n] [-t when] <poweroff|halt|reboot|suspend>\n"
 		"       %s [-s socket] -c <name> [start|stop|reload|end|poweroff|halt|reboot|suspend|cctl]...\n",
 		cyberctlname, cyberctlname, cyberctlname);
 	exit(EXIT_FAILURE);
@@ -40,10 +40,10 @@ cyberctl_open(const char *name) {
 		}
 
 		if (connect(fd, (const struct sockaddr *)&addr, sizeof (addr)) != 0) {
-			err(EXIT_FAILURE, "connect");
+			err(EXIT_FAILURE, "connect %s", addr.sun_path);
 		}
 	} else {
-		err(EXIT_FAILURE, "socket");
+		err(EXIT_FAILURE, "socket %s", name);
 	}
 
 	return fd;
@@ -91,26 +91,36 @@ cyberctl_command_system(const char *cyberctlcommand) {
 static void
 cyberctl_daemon(int fd,
 	const char *command,
-	const char *when,
-	size_t whenlen,
+	time_t when,
 	const char *daemonname) {
-	size_t buffersize = 7 + whenlen + strlen(daemonname);
+	size_t buffersize = 27 + strlen(daemonname);
 	char buffer[buffersize];
+	size_t bufferlen;
 
-	snprintf(buffer, buffersize, "%.4s %s %s", command, when, daemonname);
-	write(fd, buffer, buffersize);
+	if ((bufferlen = snprintf(buffer, buffersize, "%.4s %.20ld %s", command, when, daemonname)) < buffersize) {
+		bufferlen++;
+
+		if (write(fd, buffer, bufferlen) != bufferlen) {
+			warn("Unable to write");
+		}
+	}
 }
 
 static void
 cyberctl_system(int fd,
 	const char *command,
-	const char *when,
-	size_t whenlen) {
-	size_t buffersize = 6 + whenlen;
+	time_t when) {
+	size_t buffersize = 26;
 	char buffer[buffersize];
+	size_t bufferlen;
 
-	snprintf(buffer, buffersize, "%.4s %s", command, when);
-	write(fd, buffer, buffersize);
+	if ((bufferlen = snprintf(buffer, buffersize, "%.4s %.20ld", command, when)) < buffersize) {
+		bufferlen++;
+
+		if (write(fd, buffer, bufferlen) != bufferlen) {
+			warn("Unable to write");
+		}
+	}
 }
 
 static void
@@ -121,6 +131,7 @@ cyberctl_cctl(int fd,
 	size_t buffersize = 6 + (end - restricted) * 5 + strlen(name);
 	char buffer[buffersize];
 	char *current = stpncpy(buffer, "cctl ", 5);
+	size_t bufferlen;
 
 	while (restricted != end) {
 		char *command = cyberctl_command_daemon(*restricted);
@@ -140,21 +151,11 @@ cyberctl_cctl(int fd,
 	}
 
 	current[-1] = '\t';
-	strncpy(current, name, buffer + buffersize - current);
-
-	write(fd, buffer, buffersize);
-}
-
-static bool
-cyberctl_is_integral(const char *str, const char **strend) {
-	const char *current = str;
-
-	while (*current != '\0' && isdigit(*current)) {
-		current++;
+	current = stpncpy(current, name, buffer + buffersize - current);
+	bufferlen = current - buffer;
+	if (write(fd, buffer, bufferlen) != bufferlen) {
+		warn("Unable to write");
 	}
-	*strend = current;
-
-	return current != str && *current == '\0';
 }
 
 static struct cyberctl_args
@@ -162,18 +163,31 @@ cyberctl_parse_args(int argc, char **argv) {
 	struct cyberctl_args args = {
 		.socket = "initctl",
 		.newctl = getenv("CYBERCTL_SOCKET"),
-		.when = "0"
+		.when = 0
 	};
+	bool sinceepoch = true;
 	int c;
 
-	while ((c = getopt(argc, argv, ":s:t:c:")) != -1) {
+	while ((c = getopt(argc, argv, ":s:t:c:n")) != -1) {
 		switch (c) {
 		case 's':
 			args.socket = optarg;
 			break;
-		case 't':
-			args.when = optarg;
-			break;
+		case 't': {
+			char *end;
+			unsigned long value = strtoul(optarg, &end, 10);
+
+			if (*end == '\0' && *optarg != '\0') {
+				args.when = (time_t) value;
+				if (args.when < 0) {
+					args.when = 0;
+				}
+			} else {
+				warnx("Expected integral value for -%c, found '%s' (stopped at '%c')",
+					optopt, optarg, *end);
+				cyberctl_usage(*argv);
+			}
+		} break;
 		case 'c':
 			if (*optarg != '\0' && *optarg != '.'
 				&& strchr(optarg, '/') == NULL) {
@@ -181,6 +195,9 @@ cyberctl_parse_args(int argc, char **argv) {
 			} else {
 				errx(EXIT_FAILURE, "Invalid socket name '%s'", optarg);
 			}
+			break;
+		case 'n':
+			sinceepoch = false;
 			break;
 		case '?':
 			warnx("Invalid option -%c", optopt);
@@ -191,16 +208,8 @@ cyberctl_parse_args(int argc, char **argv) {
 		}
 	}
 
-	const char *whenend;
-	if (!cyberctl_is_integral(args.when, &whenend)) {
-		warnx("-t option expected to be an integer, found %s", args.when);
-		cyberctl_usage(*argv);
-	}
-
-	args.whenlen = whenend - args.when;
-
-	if (argc - optind == 0) {
-		cyberctl_usage(*argv);
+	if (!sinceepoch) {
+		args.when += time(NULL);
 	}
 
 	return args;
@@ -215,21 +224,32 @@ main(int argc, char **argv) {
 
 	if (args.newctl != NULL) {
 		cyberctl_cctl(fd, argpos, argend, args.newctl);
-	} if ((command = cyberctl_command_daemon(*argpos)) != NULL) {
-		argpos++;
-
-		while (argpos < argend) {
-			cyberctl_daemon(fd, command, args.when, args.whenlen, *argpos);
+	} else if (argc - optind > 0) {
+		if ((command = cyberctl_command_daemon(*argpos)) != NULL) {
 			argpos++;
-		}
-	} else if ((command = cyberctl_command_system(*argpos)) != NULL) {
-		if (argend - argpos == 1) {
-			cyberctl_system(fd, command, args.when, args.whenlen);
+
+			if (argpos != argend) {
+				do {
+					cyberctl_daemon(fd, command, args.when, *argpos);
+					argpos++;
+				} while (argpos != argend);
+			} else {
+				warnx("No daemon(s) specified for command '%s'", argpos[-1]);
+				cyberctl_usage(*argv);
+			}
+		} else if ((command = cyberctl_command_system(*argpos)) != NULL) {
+			if (argend - argpos == 1) {
+				cyberctl_system(fd, command, args.when);
+			} else {
+				warnx("Unexpected '%s' after '%s'", argpos[1], *argpos);
+				cyberctl_usage(*argv);
+			}
 		} else {
+			warnx("Unknown command '%s'", *argpos);
 			cyberctl_usage(*argv);
 		}
 	} else {
-		warnx("Unknown command '%s'", *argpos);
+		warnx("Missing argument");
 		cyberctl_usage(*argv);
 	}
 

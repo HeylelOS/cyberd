@@ -7,8 +7,8 @@ header:
 sections:
     name: "send command to a cyberd init instance"
     synopsis:
-        - "cyberctl [-s socket] [-t when] <start|stop|reload|end> daemon..."
-        - "cyberctl [-s socket] [-t when] <poweroff|halt|reboot|suspend>"
+        - "cyberctl [-s socket] [-n] [-t when] <start|stop|reload|end> daemon..."
+        - "cyberctl [-s socket] [-n] [-t when] <poweroff|halt|reboot|suspend>"
         - "cyberctl [-s socket] -c <name> [start|stop|reload|end|poweroff|halt|reboot|suspend|cctl]..."
     description: >
         This command line interface is meant to execute commands to a cyberd instance.
@@ -19,6 +19,7 @@ sections:
         This allows creations of less-priviliged sockets to restrict access only to needed features of cyberd.
     options:
         "-s socket": "Name of the socket to connect to."
+        "-n": "Executes the command relative to the current time, not since epoch."
         "-t when": "The when specifies the unix timestamp at which the command may be executed."
         "-c <name>": "Name of the new socket to create."
     "see also":
