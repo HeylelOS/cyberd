@@ -3,6 +3,7 @@
 #include "config.h"
 
 #ifndef CONFIG_STDOUT_LOG
+#include <stdio.h>
 #include <syslog.h>
 #include <libgen.h>
 #else

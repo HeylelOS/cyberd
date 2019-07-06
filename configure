@@ -2,7 +2,7 @@
 
 CONFIG_DEBUG=1
 
-while getopts h opt
+while getopts hrd opt
 do
 	case $opt in
 	h) cat <<EOF
@@ -50,7 +50,7 @@ EOF
 done
 
 shift $((OPTIND - 1))
-[ ! -z "$*" ] && export $*
+[ ! -z "$*" ] && export -- "$@"
 
 # Generic
 [ -z "$NAME" ] && NAME='cyber'
