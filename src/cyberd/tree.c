@@ -174,10 +174,12 @@ struct tree_node *
 tree_node_create(tree_element_t *element) {
 	struct tree_node *node = malloc(sizeof (*node));
 
-	node->element = element;
-	node->left = NULL;
-	node->right = NULL;
-	node->height = 1;
+	if (node != NULL) {
+		node->element = element;
+		node->left = NULL;
+		node->right = NULL;
+		node->height = 1;
+	}
 
 	return node;
 }
