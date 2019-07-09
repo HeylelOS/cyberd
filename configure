@@ -133,7 +133,6 @@ cat <<EOF > src/config.h
 #define CONFIG_MAX_ACCEPTOR_LEN 255
 
 #define CONFIG_READ_BUFFER_SIZE 512
-#define CONFIG_LOG_ERROR_BUFFER_SIZE 128
 
 /* CONFIG_H */
 #endif

@@ -102,20 +102,22 @@ daemon_conf_parse_general_expand_arguments(const char *args) {
 		if (p.we_wordc >= 1) {
 			size_t total = 0;
 			int i;
-			char *str;
 
 			for (i = 0; i < p.we_wordc; i += 1) {
 				total += strlen(p.we_wordv[i]) + 1;
 			}
 
 			arguments = malloc((p.we_wordc + 1) * sizeof (char *) + total);
-			str = (char *)(arguments + p.we_wordc + 1);
 
-			for (i = 0; i < p.we_wordc; i += 1) {
-				arguments[i] = str;
-				str = stpcpy(str, p.we_wordv[i]) + 1;
+			if (arguments != NULL) {
+				char *str = (char *)(arguments + p.we_wordc + 1);
+
+				for (i = 0; i < p.we_wordc; i += 1) {
+					arguments[i] = str;
+					str = stpcpy(str, p.we_wordv[i]) + 1;
+				}
+				arguments[i] = NULL;
 			}
-			arguments[i] = NULL;
 		} else {
 			log_error("daemon_conf_parse: Argument list must have at least one argument");
 		}
@@ -139,12 +141,20 @@ daemon_conf_parse_general(struct daemon_conf *conf,
 
 	if (value != NULL) {
 		if (strcmp(key, "path") == 0) {
-			free(conf->path);
-			conf->path = strdup(value);
+			char *newpath = strdup(value);
+
+			if (newpath != NULL) {
+				free(conf->path);
+				conf->path = newpath;
+			} else {
+				return -1;
+			}
 		} else if (strcmp(key, "workdir") == 0) {
-			if (*value == '/') {
+			char *newwd;
+
+			if (*value == '/' && (newwd = strdup(value)) != NULL) {
 				free(conf->wd);
-				conf->wd = strdup(value);
+				conf->wd = newwd;
 			} else {
 				return -1;
 			}
@@ -222,7 +232,9 @@ daemon_conf_parse_environment(struct daemon_conf *conf, const char *string, size
 			}
 		}
 
-		conf->environment[end] = strdup(string);
+		if ((conf->environment[end] = strdup(string)) == NULL) {
+			return -1;
+		}
 		conf->environment[end + 1] = NULL;
 
 		return 0;

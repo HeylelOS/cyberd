@@ -84,7 +84,9 @@ spawns_record(struct daemon *daemon) {
 	struct tree_node *node
 		= tree_node_create(daemon);
 
-	tree_insert(&spawns, node);
+	if (node != NULL) {
+		tree_insert(&spawns, node);
+	}
 }
 
 struct daemon *
