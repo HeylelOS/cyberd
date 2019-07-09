@@ -140,11 +140,11 @@ suspend(void) {
 
 #ifdef RB_SW_SUSPEND
 	if (reboot(RB_SW_SUSPEND) == -1) {
-		log_error("reboot(RB_SW_SUSPEND)");
+		log_error("reboot(RB_SW_SUSPEND): %m");
 	}
 #else
 #warning "Unsupported suspend operation will not be available"
-	log_print("Suspend not available on this operating system");
+	log_error("Suspend not available on this operating system");
 #endif
 }
 
@@ -214,12 +214,12 @@ main(int argc,
 						running = false;
 					}
 				} else {
-					log_print("Unknown scheduled action received");
+					log_error("Unknown scheduled action received");
 				} break;
 			}
 		} else if (errno != EINTR) {
 			/* Error, signal not considered */
-			log_error("pselect");
+			log_error("pselect: %m");
 		}
 	}
 
