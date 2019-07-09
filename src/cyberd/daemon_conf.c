@@ -39,13 +39,13 @@ daemon_conf_parse_general_uid(const char *user, uid_t *uidp) {
 			unsigned long luid = strtoul(user, &end, 10);
 
 			if(*user == '\0' || *end != '\0') {
-				log_print("Unable to infer uid from '%s'", user);
+				log_error("Unable to infer uid from '%s'", user);
 				return -1;
 			} else {
 				*uidp = (uid_t) luid;
 			}
 		} else {
-			log_error("Unable to infer uid from '%s', getpwnam", user);
+			log_error("Unable to infer uid from '%s', getpwnam: %m", user);
 			return -1;
 		}
 	} else {
@@ -72,13 +72,13 @@ daemon_conf_parse_general_gid(const char *group, gid_t *gidp) {
 			unsigned long lgid = strtoul(group, &end, 10);
 
 			if(*group == '\0' || *end != '\0') {
-				log_print("Unable to infer gid from '%s'", group);
+				log_error("Unable to infer gid from '%s'", group);
 				return -1;
 			} else {
 				*gidp = (gid_t) lgid;
 			}
 		} else {
-			log_error("Unable to infer gid from '%s', getgrnam", group);
+			log_error("Unable to infer gid from '%s', getgrnam: %m", group);
 			return -1;
 		}
 	} else {
@@ -117,7 +117,7 @@ daemon_conf_parse_general_expand_arguments(const char *args) {
 			}
 			arguments[i] = NULL;
 		} else {
-			log_print("daemon_conf_parse: Argument list must have at least one argument");
+			log_error("daemon_conf_parse: Argument list must have at least one argument");
 		}
 
 		wordfree(&p);
@@ -227,7 +227,7 @@ daemon_conf_parse_environment(struct daemon_conf *conf, const char *string, size
 
 		return 0;
 	} else {
-		log_print("daemon_conf_parse: Environment variable must be of type <key>=<value>, found '%s'", string);
+		log_error("daemon_conf_parse: Environment variable must be of type <key>=<value>, found '%s'", string);
 	}
 
 	return -1;

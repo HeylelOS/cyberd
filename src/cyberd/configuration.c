@@ -79,7 +79,7 @@ configuration_daemons_reload(const char *name, FILE *filep, struct tree *olddaem
 				daemon_start(daemon);
 			}
 		} else {
-			log_print("Error while reloading '%s'", daemon->name);
+			log_error("Error while reloading '%s'", daemon->name);
 
 			daemon_destroy(daemon);
 			tree_node_destroy(node);
@@ -95,10 +95,10 @@ configuration_fopenat(int dirfd, const char *path) {
 	if(fd >= 0) {
 		if((filep = fdopen(fd, "r")) == NULL) {
 			close(fd);
-			log_error("configuration fdopen %s", path);
+			log_error("configuration fdopen %s: %m", path);
 		}
 	} else {
-		log_error("configuration openat %s", path);
+		log_error("configuration openat %s: %m", path);
 	}
 
 	return filep;
@@ -125,10 +125,10 @@ configuration_init(void) {
 		}
 
 		if(errno != 0) {
-			log_error("configuration_init readdir");
+			log_error("configuration_init readdir: %m");
 		}
 	} else {
-		log_error("configuration_init opendir");
+		log_error("configuration_init opendir: %m");
 	}
 }
 
@@ -164,10 +164,10 @@ configuration_reload(void) {
 		}
 
 		if(errno != 0) {
-			log_error("configuration_reload readdir");
+			log_error("configuration_reload readdir: %m");
 		}
 	} else {
-		log_error("configuration_reload opendir");
+		log_error("configuration_reload opendir: %m");
 	}
 
 	daemons_preorder_cleanup(olddaemons.root);

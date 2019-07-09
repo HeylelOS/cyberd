@@ -9,6 +9,10 @@ log_init(char *cyberdname);
 void
 log_deinit(void);
 
+/** Restarts logging */
+void
+log_restart(void);
+
 /**
  * Prints in the log according to format
  * @param format Format to follow
