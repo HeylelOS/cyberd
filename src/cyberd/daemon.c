@@ -18,7 +18,7 @@ static int
 daemon_child_close_all_proc(pid_t pid) {
 	size_t buffersize = 16;
 
-	while(true) {
+	while(buffersize < NAME_MAX) {
 		char buffer[buffersize];
 
 		if(snprintf(buffer, buffersize, "/proc/%d/fd", pid) < buffersize) {
@@ -42,11 +42,13 @@ daemon_child_close_all_proc(pid_t pid) {
 				}
 			}
 
-			return -1;
+			break;
 		} else {
 			buffersize *= 2;
 		}
 	}
+
+	return -1;
 }
 
 static int
@@ -153,16 +155,24 @@ daemon_spawn(struct daemon *daemon) {
 struct daemon *
 daemon_create(const char *name) {
 	struct daemon *daemon = malloc(sizeof(*daemon));
+	char *dupped = strdup(name);
 
-	daemon->name = strdup(name);
-	daemon->state = DAEMON_STOPPED;
+	if(daemon != NULL && dupped != NULL) {
+		daemon->name = dupped;
+		daemon->state = DAEMON_STOPPED;
 
-	daemon->namehash = hash_string(name);
-	daemon->pid = 0;
+		daemon->namehash = hash_string(daemon->name);
+		daemon->pid = 0;
 
-	daemon_conf_init(&daemon->conf);
+		daemon_conf_init(&daemon->conf);
 
-	return daemon;
+		return daemon;
+	} else {
+		free(daemon);
+		free(dupped);
+
+		return NULL;
+	}
 }
 
 void

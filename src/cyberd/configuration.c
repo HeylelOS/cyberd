@@ -39,18 +39,22 @@ static void
 configuration_daemons_load(const char *name, FILE *filep) {
 	struct daemon *daemon = daemon_create(name);
 
-	if(daemon_conf_parse(&daemon->conf, filep)) {
-		struct tree_node *node = tree_node_create(daemon);
+	if(daemon != NULL) {
+		if(daemon_conf_parse(&daemon->conf, filep)) {
+			struct tree_node *node = tree_node_create(daemon);
 
-		tree_insert(&daemons, node);
+			if(node != NULL) {
+				tree_insert(&daemons, node);
 
-		log_print("Loaded '%s'", daemon->name);
+				log_print("Loaded '%s'", daemon->name);
 
-		if(DAEMON_STARTS_AT(daemon, DAEMON_START_LOAD)) {
-			daemon_start(daemon);
+				if(DAEMON_STARTS_AT(daemon, DAEMON_START_LOAD)) {
+					daemon_start(daemon);
+				}
+			}
+		} else {
+			daemon_destroy(daemon);
 		}
-	} else {
-		daemon_destroy(daemon);
 	}
 }
 
