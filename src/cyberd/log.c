@@ -8,11 +8,16 @@
 #include <syslog.h>
 #include <libgen.h>
 
+#define LOG_OPTIONS (LOG_PID | LOG_CONS | LOG_NDELAY | LOG_NOWAIT)
+
+static const char *ident;
+
 void
 log_init(char *cyberdname) {
+	ident = basename(cyberdname);
 
-	setlogmask(LOG_MASK(LOG_NOTICE) | LOG_MASK(LOG_ERR));
-	openlog(basename(cyberdname), LOG_PID | LOG_CONS | LOG_NDELAY | LOG_NOWAIT, LOG_USER);
+	setlogmask(LOG_MASK(LOG_INFO) | LOG_MASK(LOG_ERR));
+	openlog(ident, LOG_OPTIONS, LOG_USER);
 }
 
 void
@@ -22,30 +27,27 @@ log_deinit(void) {
 }
 
 void
+log_restart(void) {
+
+	closelog();
+	openlog(ident, LOG_OPTIONS, LOG_USER);
+}
+
+void
 log_print(const char *format, ...) {
 	va_list ap;
 
 	va_start(ap, format);
-	vsyslog(LOG_NOTICE, format, ap);
+	vsyslog(LOG_INFO, format, ap);
 	va_end(ap);
 }
 
 void
 log_error(const char *format, ...) {
-	size_t buffersize = CONFIG_LOG_ERROR_BUFFER_SIZE;
 	va_list ap;
 
 	va_start(ap, format);
-	while (true) {
-		char buffer[buffersize];
-
-		if (vsnprintf(buffer, buffersize, format, ap) < buffersize) {
-			syslog(LOG_ERR, "%s: %m\n", buffer);
-			break;
-		} else {
-			buffersize *= 2;
-		}
-	}
+	vsyslog(LOG_ERR, format, ap);
 	va_end(ap);
 }
 

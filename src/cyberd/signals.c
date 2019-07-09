@@ -19,6 +19,7 @@ sigterm_handler(int sig) {
 static void
 sighup_handler(int sig) {
 
+	log_restart();
 	configuration_reload();
 }
 

@@ -199,7 +199,7 @@ daemon_start(struct daemon *daemon) {
 		log_print("Daemon start '%s': Is stopping", daemon->name);
 		break;
 	default:
-		log_print("Daemon start '%s': Inconsistent state", daemon->name);
+		log_error("Daemon start '%s': Inconsistent state", daemon->name);
 		break;
 	}
 }
@@ -220,7 +220,7 @@ daemon_stop(struct daemon *daemon) {
 		log_print("Daemon stop '%s': Is stopping", daemon->name);
 		break;
 	default:
-		log_print("Daemon stop '%s': Inconsistent state", daemon->name);
+		log_error("Daemon stop '%s': Inconsistent state", daemon->name);
 		break;
 	}
 }
@@ -240,7 +240,7 @@ daemon_reload(struct daemon *daemon) {
 		log_print("Daemon reload '%s': Is stopping", daemon->name);
 		break;
 	default:
-		log_print("Daemon reload '%s': Inconsistent state", daemon->name);
+		log_error("Daemon reload '%s': Inconsistent state", daemon->name);
 		break;
 	}
 }
@@ -261,7 +261,7 @@ daemon_end(struct daemon *daemon) {
 		kill(daemon->pid, SIGKILL);
 		break;
 	default:
-		log_print("Daemon end '%s': Inconsistent state", daemon->name);
+		log_error("Daemon end '%s': Inconsistent state", daemon->name);
 		break;
 	}
 }

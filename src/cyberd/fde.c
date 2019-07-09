@@ -18,24 +18,24 @@ fde_create_acceptor(const char *name, perms_t perms) {
 	int fd = socket(AF_LOCAL, SOCK_STREAM, 0);
 
 	if (fd == -1) {
-		log_error("fde_create_acceptor socket %s", name);
+		log_error("fde_create_acceptor socket %s: %m", name);
 		goto fde_create_acceptor_err0;
 	}
 
 	if (snprintf(addr.sun_path, SOCKADDR_UN_MAXLEN,
 		CONFIG_CONTROLLERS_DIRECTORY"/%s", name) >= SOCKADDR_UN_MAXLEN) {
 		errno = EOVERFLOW;
-		log_error("fde_create_acceptor %s", name);
+		log_error("fde_create_acceptor %s: %m", name);
 		goto fde_create_acceptor_err1;
 	}
 
 	if (bind(fd, (const struct sockaddr *)&addr, sizeof (addr)) != 0) {
-		log_error("fde_create_acceptor bind %s", name);
+		log_error("fde_create_acceptor bind %s: %m", name);
 		goto fde_create_acceptor_err1;
 	}
 
 	if (listen(fd, CONFIG_CONNECTIONS_LIMIT) != 0) {
-		log_error("fde_create_acceptor listen %s", name);
+		log_error("fde_create_acceptor listen %s: %m", name);
 		goto fde_create_acceptor_err2;
 	}
 
@@ -69,7 +69,7 @@ fde_create_controller(const struct fde *acceptor) {
 		fde->perms = acceptor->perms;
 		fde->control = control_create();
 	} else {
-		log_error("fde_create_controller accept");
+		log_error("fde_create_controller accept: %m");
 	}
 
 	return fde;
