@@ -12,8 +12,10 @@ control_create(void) {
 	struct control *control
 		= malloc(sizeof(*control));
 
-	control->state = CONTROL_STATE_COMMAND_DETERMINATION;
-	control->command = COMMAND_READER_START;
+	if(control != NULL) {
+		control->state = CONTROL_STATE_COMMAND_DETERMINATION;
+		control->command = COMMAND_READER_START;
+	}
 
 	return control;
 }

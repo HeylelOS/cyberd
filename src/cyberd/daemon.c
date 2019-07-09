@@ -9,6 +9,7 @@
 #include <signal.h>
 #include <sys/time.h>
 #include <sys/resource.h>
+#include <sys/stat.h>
 #include <dirent.h>
 #include <errno.h>
 #include <err.h>
@@ -17,7 +18,7 @@ static int
 daemon_child_close_all_proc(pid_t pid) {
 	size_t buffersize = 16;
 
-	while(true) {
+	while(buffersize < NAME_MAX) {
 		char buffer[buffersize];
 
 		if(snprintf(buffer, buffersize, "/proc/%d/fd", pid) < buffersize) {
@@ -41,11 +42,13 @@ daemon_child_close_all_proc(pid_t pid) {
 				}
 			}
 
-			return -1;
+			break;
 		} else {
 			buffersize *= 2;
 		}
 	}
+
+	return -1;
 }
 
 static int
@@ -106,10 +109,8 @@ daemon_child_argv(struct daemon *daemon) {
 static char **
 daemon_child_envp(struct daemon *daemon) {
 
-	if(clearenv() == 0) {
-		extern char **environ;
-
-		return environ;
+	if(daemon->conf.environment != NULL) {
+		return daemon->conf.environment;
 	} else {
 		static char *emptyenvp[] = { NULL };
 
@@ -119,6 +120,8 @@ daemon_child_envp(struct daemon *daemon) {
 
 static void
 daemon_child_setup(struct daemon *daemon) {
+
+	umask(daemon->conf.umask);
 
 	if(daemon_child_setup_fds(daemon) == 0
 		&& daemon_child_setup_ids(daemon) == 0) {
@@ -152,16 +155,24 @@ daemon_spawn(struct daemon *daemon) {
 struct daemon *
 daemon_create(const char *name) {
 	struct daemon *daemon = malloc(sizeof(*daemon));
+	char *dupped = strdup(name);
 
-	daemon->name = strdup(name);
-	daemon->state = DAEMON_STOPPED;
+	if(daemon != NULL && dupped != NULL) {
+		daemon->name = dupped;
+		daemon->state = DAEMON_STOPPED;
 
-	daemon->namehash = hash_string(name);
-	daemon->pid = 0;
+		daemon->namehash = hash_string(daemon->name);
+		daemon->pid = 0;
 
-	daemon_conf_init(&daemon->conf);
+		daemon_conf_init(&daemon->conf);
 
-	return daemon;
+		return daemon;
+	} else {
+		free(daemon);
+		free(dupped);
+
+		return NULL;
+	}
 }
 
 void
@@ -198,7 +209,7 @@ daemon_start(struct daemon *daemon) {
 		log_print("Daemon start '%s': Is stopping", daemon->name);
 		break;
 	default:
-		log_print("Daemon start '%s': Inconsistent state", daemon->name);
+		log_error("Daemon start '%s': Inconsistent state", daemon->name);
 		break;
 	}
 }
@@ -219,7 +230,7 @@ daemon_stop(struct daemon *daemon) {
 		log_print("Daemon stop '%s': Is stopping", daemon->name);
 		break;
 	default:
-		log_print("Daemon stop '%s': Inconsistent state", daemon->name);
+		log_error("Daemon stop '%s': Inconsistent state", daemon->name);
 		break;
 	}
 }
@@ -239,7 +250,7 @@ daemon_reload(struct daemon *daemon) {
 		log_print("Daemon reload '%s': Is stopping", daemon->name);
 		break;
 	default:
-		log_print("Daemon reload '%s': Inconsistent state", daemon->name);
+		log_error("Daemon reload '%s': Inconsistent state", daemon->name);
 		break;
 	}
 }
@@ -260,7 +271,7 @@ daemon_end(struct daemon *daemon) {
 		kill(daemon->pid, SIGKILL);
 		break;
 	default:
-		log_print("Daemon end '%s': Inconsistent state", daemon->name);
+		log_error("Daemon end '%s': Inconsistent state", daemon->name);
 		break;
 	}
 }

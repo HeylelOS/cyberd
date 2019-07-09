@@ -94,7 +94,7 @@ tree_node_insert(struct tree_node *root,
 		} else {
 			/* This should not happen, will certainly generate memory leaks
 			in most use case in the process */
-			log_print("Trying to reinsert element %lu", hash_field(node->element));
+			log_error("Trying to reinsert element %lu", hash_field(node->element));
 		}
 
 		root->height = max(tree_node_height(root->left), tree_node_height(root->right)) + 1;
@@ -174,10 +174,12 @@ struct tree_node *
 tree_node_create(tree_element_t *element) {
 	struct tree_node *node = malloc(sizeof(*node));
 
-	node->element = element;
-	node->left = NULL;
-	node->right = NULL;
-	node->height = 1;
+	if(node != NULL) {
+		node->element = element;
+		node->left = NULL;
+		node->right = NULL;
+		node->height = 1;
+	}
 
 	return node;
 }

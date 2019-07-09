@@ -1,6 +1,8 @@
 #include "daemon_conf.h"
 #include "log.h"
 
+#include "config.h"
+
 #include <stdlib.h>
 #include <signal.h>
 #include <string.h>
@@ -14,9 +16,10 @@
  * Section in the configuration file
  */
 enum daemon_conf_section {
-	SECTION_UNKNOWN,
 	SECTION_GENERAL,
-	SECTION_START
+	SECTION_ENVIRONMENT,
+	SECTION_START,
+	SECTION_UNKNOWN,
 };
 
 /**
@@ -36,13 +39,13 @@ daemon_conf_parse_general_uid(const char *user, uid_t *uidp) {
 			unsigned long luid = strtoul(user, &end, 10);
 
 			if(*user == '\0' || *end != '\0') {
-				log_print("Unable to infer uid from '%s'", user);
+				log_error("Unable to infer uid from '%s'", user);
 				return -1;
 			} else {
 				*uidp = (uid_t) luid;
 			}
 		} else {
-			log_error("Unable to infer uid from '%s', getpwnam", user);
+			log_error("Unable to infer uid from '%s', getpwnam: %m", user);
 			return -1;
 		}
 	} else {
@@ -69,13 +72,13 @@ daemon_conf_parse_general_gid(const char *group, gid_t *gidp) {
 			unsigned long lgid = strtoul(group, &end, 10);
 
 			if(*group == '\0' || *end != '\0') {
-				log_print("Unable to infer gid from '%s'", group);
+				log_error("Unable to infer gid from '%s'", group);
 				return -1;
 			} else {
 				*gidp = (gid_t) lgid;
 			}
 		} else {
-			log_error("Unable to infer gid from '%s', getgrnam", group);
+			log_error("Unable to infer gid from '%s', getgrnam: %m", group);
 			return -1;
 		}
 	} else {
@@ -99,22 +102,24 @@ daemon_conf_parse_general_expand_arguments(const char *args) {
 		if(p.we_wordc >= 1) {
 			size_t total = 0;
 			int i;
-			char *str;
 
 			for(i = 0; i < p.we_wordc; i += 1) {
 				total += strlen(p.we_wordv[i]) + 1;
 			}
 
 			arguments = malloc((p.we_wordc + 1) * sizeof(char *) + total);
-			str = (char *)(arguments + p.we_wordc + 1);
 
-			for(i = 0; i < p.we_wordc; i += 1) {
-				arguments[i] = str;
-				str = stpcpy(str, p.we_wordv[i]) + 1;
+			if(arguments != NULL) {
+				char *str = (char *)(arguments + p.we_wordc + 1);
+
+				for(i = 0; i < p.we_wordc; i += 1) {
+					arguments[i] = str;
+					str = stpcpy(str, p.we_wordv[i]) + 1;
+				}
+				arguments[i] = NULL;
 			}
-			arguments[i] = NULL;
 		} else {
-			log_print("daemon_conf_parse: Argument list must have at least one argument");
+			log_error("daemon_conf_parse: Argument list must have at least one argument");
 		}
 
 		wordfree(&p);
@@ -136,8 +141,24 @@ daemon_conf_parse_general(struct daemon_conf *conf,
 
 	if(value != NULL) {
 		if(strcmp(key, "path") == 0) {
-			free(conf->path);
-			conf->path = strdup(value);
+			char *newpath = strdup(value);
+
+			if(newpath != NULL) {
+				free(conf->path);
+				conf->path = newpath;
+			} else {
+				return -1;
+			}
+		} else if(strcmp(key, "workdir") == 0) {
+			char *newwd;
+
+			if(*value == '/'
+				&& (newwd = strdup(value)) != NULL) {
+				free(conf->wd);
+				conf->wd = newwd;
+			} else {
+				return -1;
+			}
 		} else if(strcmp(key, "user") == 0) {
 			if(daemon_conf_parse_general_uid(value, &conf->uid) == -1) {
 				return -1;
@@ -146,6 +167,16 @@ daemon_conf_parse_general(struct daemon_conf *conf,
 			if(daemon_conf_parse_general_gid(value, &conf->gid) == -1) {
 				return -1;
 			}
+		} else if(strcmp(key, "umask") == 0) {
+			char *valueend;
+			unsigned long cmask = strtoul(value, &valueend, 8);
+
+			if(*value == '\0' || *valueend != '\0') {
+				return -1;
+			}
+
+			conf->umask = cmask & 0x1FF;
+
 		} else if(strcmp(key, "arguments") == 0) {
 			char **arguments = daemon_conf_parse_general_expand_arguments(value);
 
@@ -159,6 +190,60 @@ daemon_conf_parse_general(struct daemon_conf *conf,
 	}
 
 	return 0;
+}
+
+/**
+ * Adds an element to the daemon environment
+ * @param conf Configuration being parsed
+ * @param string String of the form <key>=<value>
+ * @param envcapp In-Out value correspondig to the capacity of conf->environment
+ * @return 0 on success or unknown key, -1 else
+ */
+static int
+daemon_conf_parse_environment(struct daemon_conf *conf, const char *string, size_t *envcapp) {
+
+	if(strchr(string, '=') != NULL) {
+		size_t end;
+
+		if(conf->environment == NULL) {
+			end = 0;
+			*envcapp = 16;
+			conf->environment = malloc(sizeof(*conf->environment) * *envcapp);
+
+			if(conf->environment == NULL) {
+				*envcapp = 0;
+				return -1;
+			}
+		} else {
+			char **env = conf->environment;
+			while(*env != NULL) {
+				env++;
+			}
+			end = env - conf->environment;
+
+			if(*envcapp == end) {
+				char **newenvironment = realloc(conf->environment, sizeof(*conf->environment) * *envcapp * 2);
+
+				if(newenvironment == NULL) {
+					return -1;
+				}
+
+				conf->environment = newenvironment;
+				*envcapp *= 2;
+			}
+		}
+
+		if((conf->environment[end] = strdup(string)) == NULL) {
+			return -1;
+		}
+		conf->environment[end + 1] = NULL;
+
+		return 0;
+	} else {
+		log_error("daemon_conf_parse: Environment variable must be of type <key>=<value>, found '%s'", string);
+	}
+
+	return -1;
 }
 
 /**
@@ -188,12 +273,16 @@ daemon_conf_init(struct daemon_conf *conf) {
 
 	conf->path = NULL;
 	conf->arguments = NULL;
+	conf->environment = NULL;
+	conf->wd = NULL;
 
 	conf->sigend = SIGTERM;
 	conf->sigreload = SIGHUP;
 
 	conf->uid = getuid();
 	conf->gid = getgid();
+
+	conf->umask = CONFIG_DEFAULT_UMASK;
 
 	/* Zero'ing startmask */
 	conf->startmask = 0;
@@ -204,16 +293,27 @@ daemon_conf_deinit(struct daemon_conf *conf) {
 
 	free(conf->path);
 	free(conf->arguments);
+	if(conf->environment != NULL) {
+		char **env = conf->environment;
+
+		while(*env != NULL) {
+			free(*env);
+			env++;
+		}
+
+		free(conf->environment);
+	}
+	free(conf->wd);
 }
 
 bool
 daemon_conf_parse(struct daemon_conf *conf,
 	FILE *filep) {
 	enum daemon_conf_section section = SECTION_GENERAL;
-	ssize_t length;
 	char *line = NULL;
-	size_t linecap = 0;
+	size_t linecap = 0, envcap = 0;
 	int errors = 0;
+	ssize_t length;
 
 	/* Reading lines */
 	while((length = getline(&line, &linecap, filep)) != -1) {
@@ -226,6 +326,8 @@ daemon_conf_parse(struct daemon_conf *conf,
 
 			if(strcmp(line, "@general") == 0) {
 				section = SECTION_GENERAL;
+			} else if(strcmp(line, "@environment") == 0) {
+				section = SECTION_ENVIRONMENT;
 			} else if(strcmp(line, "@start") == 0) {
 				section = SECTION_START;
 			} else {
@@ -234,16 +336,19 @@ daemon_conf_parse(struct daemon_conf *conf,
 		} else if(*line != '\0'
 			&& *line != '#') {
 			char *value = line;
-			strsep(&value, "=");
 
 			switch(section) {
 			case SECTION_GENERAL:
-				if(daemon_conf_parse_general(conf, line, value) != 0) {
+				if(daemon_conf_parse_general(conf, strsep(&value, "="), value) != 0) {
 					errors++;
 				}
 				break;
+			case SECTION_ENVIRONMENT:
+				if(daemon_conf_parse_environment(conf, value, &envcap) != 0) {
+					errors++;
+				}
 			case SECTION_START:
-				if(daemon_conf_parse_start(conf, line, value) != 0) {
+				if(daemon_conf_parse_start(conf, strsep(&value, "="), value) != 0) {
 					errors++;
 				}
 				break;

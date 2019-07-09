@@ -39,18 +39,22 @@ static void
 configuration_daemons_load(const char *name, FILE *filep) {
 	struct daemon *daemon = daemon_create(name);
 
-	if(daemon_conf_parse(&daemon->conf, filep)) {
-		struct tree_node *node = tree_node_create(daemon);
+	if(daemon != NULL) {
+		if(daemon_conf_parse(&daemon->conf, filep)) {
+			struct tree_node *node = tree_node_create(daemon);
 
-		tree_insert(&daemons, node);
+			if(node != NULL) {
+				tree_insert(&daemons, node);
 
-		log_print("Loaded '%s'", daemon->name);
+				log_print("Loaded '%s'", daemon->name);
 
-		if(DAEMON_STARTS_AT(daemon, DAEMON_START_LOAD)) {
-			daemon_start(daemon);
+				if(DAEMON_STARTS_AT(daemon, DAEMON_START_LOAD)) {
+					daemon_start(daemon);
+				}
+			}
+		} else {
+			daemon_destroy(daemon);
 		}
-	} else {
-		daemon_destroy(daemon);
 	}
 }
 
@@ -79,7 +83,7 @@ configuration_daemons_reload(const char *name, FILE *filep, struct tree *olddaem
 				daemon_start(daemon);
 			}
 		} else {
-			log_print("Error while reloading '%s'", daemon->name);
+			log_error("Error while reloading '%s'", daemon->name);
 
 			daemon_destroy(daemon);
 			tree_node_destroy(node);
@@ -95,10 +99,10 @@ configuration_fopenat(int dirfd, const char *path) {
 	if(fd >= 0) {
 		if((filep = fdopen(fd, "r")) == NULL) {
 			close(fd);
-			log_error("configuration fdopen %s", path);
+			log_error("configuration fdopen %s: %m", path);
 		}
 	} else {
-		log_error("configuration openat %s", path);
+		log_error("configuration openat %s: %m", path);
 	}
 
 	return filep;
@@ -125,10 +129,10 @@ configuration_init(void) {
 		}
 
 		if(errno != 0) {
-			log_error("configuration_init readdir");
+			log_error("configuration_init readdir: %m");
 		}
 	} else {
-		log_error("configuration_init opendir");
+		log_error("configuration_init opendir: %m");
 	}
 }
 
@@ -164,10 +168,10 @@ configuration_reload(void) {
 		}
 
 		if(errno != 0) {
-			log_error("configuration_reload readdir");
+			log_error("configuration_reload readdir: %m");
 		}
 	} else {
-		log_error("configuration_reload opendir");
+		log_error("configuration_reload opendir: %m");
 	}
 
 	daemons_preorder_cleanup(olddaemons.root);

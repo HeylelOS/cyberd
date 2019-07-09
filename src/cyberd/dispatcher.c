@@ -9,7 +9,7 @@
 
 #include <stdlib.h>
 #include <unistd.h>
-#include <string.h> /* memcpy, memset */
+#include <string.h> /* memcpy */
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -30,13 +30,19 @@ dispatcher_hash_fd(const tree_element_t *element) {
 	return fde->fd;
 }
 
-static void
+static bool
 dispatcher_insert(struct fde *fde) {
 	struct tree_node *node
 		= tree_node_create(fde);
 
-	FD_SET(fde->fd, &dispatcher.sets->activeset);
-	tree_insert(&dispatcher.fds, node);
+	if(node != NULL) {
+		FD_SET(fde->fd, &dispatcher.sets->activeset);
+		tree_insert(&dispatcher.fds, node);
+
+		return true;
+	} else {
+		return false;
+	}
 }
 
 static void
@@ -57,9 +63,11 @@ dispatcher_find(int fd) {
 void
 dispatcher_init(void) {
 
-	dispatcher.sets = malloc(sizeof(*dispatcher.sets));
-	memset(&dispatcher.sets->activeset, 0, sizeof(fd_set));
-	memset(&dispatcher.sets->readset, 0, sizeof(fd_set));
+	dispatcher.sets = calloc(1, sizeof(*dispatcher.sets));
+	/* If we cannot create dispatcher sets, we're basically foobar */
+	if(dispatcher.sets == NULL) {
+		abort();
+	}
 
 	tree_init(&dispatcher.fds, dispatcher_hash_fd);
 
@@ -72,12 +80,14 @@ dispatcher_init(void) {
 				PERMS_SYSTEM_ALL);
 
 		if(acceptor != NULL) {
-			dispatcher_insert(acceptor);
+			if(!dispatcher_insert(acceptor)) {
+				fde_destroy(acceptor);
+			}
 		} else {
-			log_print("dispatcher_init: Unable to create main 'initctl' acceptor");
+			log_error("dispatcher_init: Unable to create main 'initctl' acceptor");
 		}
 	} else {
-		log_error("dispatcher_init: Unable to create controllers directory '"CONFIG_CONTROLLERS_DIRECTORY"'");
+		log_error("dispatcher_init: Unable to create controllers directory '"CONFIG_CONTROLLERS_DIRECTORY"': %m");
 	}
 }
 
@@ -134,8 +144,9 @@ dispatcher_handle_acceptor(struct fde *acceptor) {
 	struct fde *controller
 		= fde_create_controller(acceptor);
 
-	if(controller != NULL) {
-		dispatcher_insert(controller);
+	if(controller != NULL
+		&& !dispatcher_insert(controller)) {
+		fde_destroy(controller);
 	}
 }
 
@@ -160,9 +171,11 @@ dispatcher_handle_controller(struct fde *controller) {
 							& ~control->cctl.permsmask);
 
 					if(acceptor != NULL) {
-						dispatcher_insert(acceptor);
+						if(!dispatcher_insert(acceptor)) {
+							fde_destroy(acceptor);
+						}
 					} else {
-						log_print("dispatcher_handle_controller: Unable to create '%s' acceptor",
+						log_error("dispatcher_handle_controller: Unable to create '%s' acceptor",
 							control->cctl.name.value);
 					}
 				} else {
@@ -176,7 +189,7 @@ dispatcher_handle_controller(struct fde *controller) {
 							&& (activity.daemon = configuration_daemon_find(control->planified.daemonhash)) != NULL)) {
 						scheduler_schedule(&activity);
 					} else {
-						log_print("dispatcher_handle_controller: Unable to find daemon");
+						log_error("dispatcher_handle_controller: Unable to find daemon");
 					}
 				}
 			}
