@@ -10,6 +10,7 @@
 #include <pwd.h>
 #include <grp.h>
 #include <wordexp.h>
+#include <ctype.h>
 #include <errno.h>
 
 /**
@@ -83,6 +84,83 @@ daemon_conf_parse_general_gid(const char *group, gid_t *gidp) {
 		}
 	} else {
 		*gidp = grp->gr_gid;
+	}
+
+	return 0;
+}
+
+static int
+daemon_conf_parse_general_signal(const char *signalname, int *signalp) {
+
+	if(isdigit(*signalname)) {
+			char *end;
+			unsigned long lsignal = strtoul(signalname, &end, 10);
+
+			if(*end == '\0' && lsignal <= (int)-1) {
+				log_error("Unable to infer decimal signal from '%s'", signalname);
+				return -1;
+			} else {
+				*signalp = (int) lsignal;
+			}
+	} else if(strcmp("SIGABRT", signalname) == 0) {
+		*signalp = SIGABRT;
+	} else if(strcmp("SIGALRM", signalname) == 0) {
+		*signalp = SIGALRM;
+	} else if(strcmp("SIGBUS", signalname) == 0) {
+		*signalp = SIGBUS;
+	} else if(strcmp("SIGCHLD", signalname) == 0) {
+		*signalp = SIGCHLD;
+	} else if(strcmp("SIGCONT", signalname) == 0) {
+		*signalp = SIGCONT;
+	} else if(strcmp("SIGFPE", signalname) == 0) {
+		*signalp = SIGFPE;
+	} else if(strcmp("SIGHUP", signalname) == 0) {
+		*signalp = SIGHUP;
+	} else if(strcmp("SIGILL", signalname) == 0) {
+		*signalp = SIGILL;
+	} else if(strcmp("SIGINT", signalname) == 0) {
+		*signalp = SIGINT;
+	} else if(strcmp("SIGKILL", signalname) == 0) {
+		*signalp = SIGKILL;
+	} else if(strcmp("SIGPIPE", signalname) == 0) {
+		*signalp = SIGPIPE;
+	} else if(strcmp("SIGQUIT", signalname) == 0) {
+		*signalp = SIGQUIT;
+	} else if(strcmp("SIGSEGV", signalname) == 0) {
+		*signalp = SIGSEGV;
+	} else if(strcmp("SIGSTOP", signalname) == 0) {
+		*signalp = SIGSTOP;
+	} else if(strcmp("SIGTERM", signalname) == 0) {
+		*signalp = SIGTERM;
+	} else if(strcmp("SIGTSTP", signalname) == 0) {
+		*signalp = SIGTSTP;
+	} else if(strcmp("SIGTTIN", signalname) == 0) {
+		*signalp = SIGTTIN;
+	} else if(strcmp("SIGTTOU", signalname) == 0) {
+		*signalp = SIGTTOU;
+	} else if(strcmp("SIGUSR1", signalname) == 0) {
+		*signalp = SIGUSR1;
+	} else if(strcmp("SIGUSR2", signalname) == 0) {
+		*signalp = SIGUSR2;
+	} else if(strcmp("SIGPOLL", signalname) == 0) {
+		*signalp = SIGPOLL;
+	} else if(strcmp("SIGPROF", signalname) == 0) {
+		*signalp = SIGPROF;
+	} else if(strcmp("SIGSYS", signalname) == 0) {
+		*signalp = SIGSYS;
+	} else if(strcmp("SIGTRAP", signalname) == 0) {
+		*signalp = SIGTRAP;
+	} else if(strcmp("SIGURG", signalname) == 0) {
+		*signalp = SIGURG;
+	} else if(strcmp("SIGVTALRM", signalname) == 0) {
+		*signalp = SIGVTALRM;
+	} else if(strcmp("SIGXCPU", signalname) == 0) {
+		*signalp = SIGXCPU;
+	} else if(strcmp("SIGXFSZ", signalname) == 0) {
+		*signalp = SIGXFSZ;
+	} else {
+		log_error("Unable to infer signal from '%s'", signalname);
+		return -1;
 	}
 
 	return 0;
@@ -177,6 +255,14 @@ daemon_conf_parse_general(struct daemon_conf *conf,
 
 			conf->umask = cmask & 0x1FF;
 
+		} else if(strcmp(key, "sigend") == 0) {
+			if(daemon_conf_parse_general_signal(value, &conf->sigend) == -1) {
+				return -1;
+			}
+		} else if(strcmp(key, "sigreload") == 0) {
+			if(daemon_conf_parse_general_signal(value, &conf->sigreload) == -1) {
+				return -1;
+			}
 		} else if(strcmp(key, "arguments") == 0) {
 			char **arguments = daemon_conf_parse_general_expand_arguments(value);
 

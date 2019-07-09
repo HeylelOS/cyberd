@@ -78,6 +78,18 @@ daemon_child_setup_fds(struct daemon *daemon) {
 }
 
 static int
+daemon_child_setup_workdir(struct daemon *daemon) {
+
+	if(daemon->conf.wd != NULL
+		&& chdir(daemon->conf.wd) == -1) {
+		warn("Unable to setup '%s' daemon working directory '%s', chdir", daemon->name, daemon->conf.wd);
+		return -1;
+	}
+
+	return 0;
+}
+
+static int
 daemon_child_setup_ids(struct daemon *daemon) {
 
 	if(setuid(daemon->conf.uid) == -1) {
@@ -124,6 +136,7 @@ daemon_child_setup(struct daemon *daemon) {
 	umask(daemon->conf.umask);
 
 	if(daemon_child_setup_fds(daemon) == 0
+		&& daemon_child_setup_workdir(daemon) == 0
 		&& daemon_child_setup_ids(daemon) == 0) {
 		if(execve(daemon->conf.path,
 			daemon_child_argv(daemon), daemon_child_envp(daemon)) == -1) {
