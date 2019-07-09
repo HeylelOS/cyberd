@@ -96,7 +96,7 @@ daemon_conf_parse_general_signal(const char *signalname, int *signalp) {
 			char *end;
 			unsigned long lsignal = strtoul(signalname, &end, 10);
 
-			if(*end == '\0' && lsignal <= (int)-1) {
+			if(*end == '\0' && lsignal <= ((unsigned int)-1 >> 1)) {
 				log_error("Unable to infer decimal signal from '%s'", signalname);
 				return -1;
 			} else {
