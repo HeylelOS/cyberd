@@ -11,6 +11,7 @@
 #include <sys/resource.h>
 #include <sys/stat.h>
 #include <dirent.h>
+#include <limits.h>
 #include <errno.h>
 #include <err.h>
 
