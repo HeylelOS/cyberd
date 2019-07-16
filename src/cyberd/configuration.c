@@ -46,9 +46,9 @@ configuration_daemons_load(const char *name, FILE *filep) {
 			if (node != NULL) {
 				tree_insert(&daemons, node);
 
-				log_print("Loaded '%s'", daemon->name);
+				log_print("'%s' loaded", daemon->name);
 
-				if (DAEMON_STARTS_AT(daemon, DAEMON_START_LOAD)) {
+				if (daemon->conf.start.load == 1) {
 					daemon_start(daemon);
 				}
 			}
@@ -77,13 +77,13 @@ configuration_daemons_reload(const char *name, FILE *filep, struct tree *olddaem
 
 			tree_insert(&daemons, node);
 
-			log_print("Reloaded '%s'", daemon->name);
+			log_print("'%s' reloaded", daemon->name);
 
-			if (DAEMON_STARTS_AT(daemon, DAEMON_START_RELOAD)) {
+			if (daemon->conf.start.reload == 1) {
 				daemon_start(daemon);
 			}
 		} else {
-			log_error("Error while reloading '%s'", daemon->name);
+			log_error("configuration_reload: Couldn't reload '%s'", daemon->name);
 
 			daemon_destroy(daemon);
 			tree_node_destroy(node);
@@ -99,10 +99,10 @@ configuration_fopenat(int dirfd, const char *path) {
 	if (fd >= 0) {
 		if ((filep = fdopen(fd, "r")) == NULL) {
 			close(fd);
-			log_error("configuration fdopen %s: %m", path);
+			log_error("configuration fdopen '%s': %m", path);
 		}
 	} else {
-		log_error("configuration openat %s: %m", path);
+		log_error("configuration openat '%s': %m", path);
 	}
 
 	return filep;
@@ -112,7 +112,7 @@ void
 configuration_init(void) {
 	DIR *dirp;
 
-	log_print("Configurating...");
+	log_print("configuration_init");
 	tree_init(&daemons, daemons_hash_field);
 
 	if ((dirp = opendir(CONFIG_DAEMONCONFS_DIRECTORY)) != NULL) {
@@ -150,7 +150,7 @@ configuration_reload(void) {
 	struct tree olddaemons = daemons;
 	DIR *dirp;
 
-	log_print("Reconfigurating...");
+	log_print("configuration_reload");
 	scheduler_empty();
 	tree_init(&daemons, daemons_hash_field);
 
