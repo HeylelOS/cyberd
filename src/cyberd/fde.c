@@ -10,7 +10,7 @@
 #include <sys/un.h>
 #include <errno.h> /* to show overflow in fde_create_acceptor */
 
-#define SOCKADDR_UN_MAXLEN sizeof (((struct sockaddr_un *)NULL)->sun_path)
+#define SOCKADDR_UN_MAXLEN (sizeof (((struct sockaddr_un *) NULL)->sun_path))
 
 struct fde *
 fde_create_acceptor(const char *name, perms_t perms) {
