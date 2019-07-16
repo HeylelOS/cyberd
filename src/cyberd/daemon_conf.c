@@ -74,13 +74,13 @@ daemon_conf_parse_general_uid(const char *user, uid_t *uidp) {
 			unsigned long luid = strtoul(user, &end, 10);
 
 			if(*user == '\0' || *end != '\0') {
-				log_error("Unable to infer uid from '%s'", user);
+				log_error("daemon_conf: Unable to infer uid from '%s'", user);
 				return -1;
 			} else {
 				*uidp = (uid_t) luid;
 			}
 		} else {
-			log_error("Unable to infer uid from '%s', getpwnam: %m", user);
+			log_error("daemon_conf: Unable to infer uid from '%s', getpwnam: %m", user);
 			return -1;
 		}
 	} else {
@@ -107,13 +107,13 @@ daemon_conf_parse_general_gid(const char *group, gid_t *gidp) {
 			unsigned long lgid = strtoul(group, &end, 10);
 
 			if(*group == '\0' || *end != '\0') {
-				log_error("Unable to infer gid from '%s'", group);
+				log_error("daemon_conf: Unable to infer gid from '%s'", group);
 				return -1;
 			} else {
 				*gidp = (gid_t) lgid;
 			}
 		} else {
-			log_error("Unable to infer gid from '%s', getgrnam: %m", group);
+			log_error("daemon_conf: Unable to infer gid from '%s', getgrnam: %m", group);
 			return -1;
 		}
 	} else {
@@ -139,7 +139,7 @@ daemon_conf_parse_general_signal(const char *signame, int *signump) {
 			if(*end != '\0' && lsignum <= ((unsigned int)-1 >> 1)) {
 				*signump = (int) lsignum;
 			} else {
-				log_error("Unable to infer decimal signal from '%s'", signame);
+				log_error("daemon_conf: Unable to infer decimal signal from '%s'", signame);
 				return -1;
 			}
 	} else {
@@ -153,7 +153,7 @@ daemon_conf_parse_general_signal(const char *signame, int *signump) {
 		if(current != signals + sizeof(signals)) {
 			*signump = current->signum;
 		} else {
-			log_error("Unable to infer signal from name '%s'", signame);
+			log_error("daemon_conf: Unable to infer signal from name '%s'", signame);
 			return -1;
 		}
 	}
@@ -340,9 +340,25 @@ daemon_conf_parse_start(struct daemon_conf *conf,
 
 	if(value == NULL) {
 		if(strcmp(key, "load") == 0) {
-			conf->startmask |= DAEMON_START_LOAD;
+			conf->start.load = 1;
 		} else if(strcmp(key, "reload") == 0) {
-			conf->startmask |= DAEMON_START_RELOAD;
+			conf->start.reload = 1;
+		} else if(strcmp(key, "any exit") == 0) {
+			conf->start.exitsuccess = 1;
+			conf->start.exitfailure = 1;
+			conf->start.killed = 1;
+			conf->start.dumped = 1;
+		} else if(strcmp(key, "exit") == 0) {
+			conf->start.exitsuccess = 1;
+			conf->start.exitfailure = 1;
+		} else if(strcmp(key, "exit success") == 0) {
+			conf->start.exitsuccess = 1;
+		} else if(strcmp(key, "exit failure") == 0) {
+			conf->start.exitfailure = 1;
+		} else if(strcmp(key, "killed") == 0) {
+			conf->start.killed = 1;
+		} else if(strcmp(key, "dumped") == 0) {
+			conf->start.dumped = 1;
 		}
 	}
 
@@ -365,8 +381,12 @@ daemon_conf_init(struct daemon_conf *conf) {
 
 	conf->umask = CONFIG_DEFAULT_UMASK;
 
-	/* Zero'ing startmask */
-	conf->startmask = 0;
+	conf->start.load = 0;
+	conf->start.reload = 0;
+	conf->start.exitsuccess = 0;
+	conf->start.exitfailure = 0;
+	conf->start.killed = 0;
+	conf->start.dumped = 0;
 }
 
 void

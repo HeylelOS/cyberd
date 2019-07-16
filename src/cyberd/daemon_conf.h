@@ -5,10 +5,6 @@
 #include <stdbool.h>
 #include <sys/types.h>
 
-#define DAEMON_STARTS_AT(d, m) (((d)->conf.startmask & (m)) != 0)
-#define DAEMON_START_LOAD (1 << 0)
-#define DAEMON_START_RELOAD (1 << 1)
-
 /** Structure which contains configurations for a daemon */
 struct daemon_conf {
 	char *path; /**< Path of the executable file */
@@ -24,7 +20,14 @@ struct daemon_conf {
 
 	mode_t umask; /**< umask of the daemon */
 
-	int startmask; /**< Bitmask holding when a daemon may want to start */
+	struct {
+		unsigned load : 1;        /**< Must be started at init load */
+		unsigned reload : 1;      /**< Must be started at init reload */
+		unsigned exitsuccess : 1; /**< Must be started when it stopped successfully */
+		unsigned exitfailure : 1; /**< Must be started when it stopped unsuccessfully */
+		unsigned killed : 1;      /**< Must be started when it was stopped by a signal */
+		unsigned dumped : 1;      /**< Must be started when it dumped core */
+	} start; /**< Bitmask holding when a daemon may want to start */
 };
 
 /**
