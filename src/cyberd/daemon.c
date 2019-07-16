@@ -33,7 +33,7 @@ daemon_child_close_all_proc(pid_t pid) {
 					unsigned long fd = strtoul(entry->d_name, &end, 10);
 		
 					if(*end == '\0') {
-						close((int)fd);
+						close((int) fd);
 					}
 				}
 		
