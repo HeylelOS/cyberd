@@ -9,7 +9,7 @@
 
 hash_t
 hash_string(const char *string) {
-	const uint8_t *ptr = (const uint8_t *)string;
+	const uint8_t *ptr = (const uint8_t *) string;
 	const uint8_t * const end = ptr + strlen(string);
 	hash_t hash = FNV_OFFSET_BASIS;
 
