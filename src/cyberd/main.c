@@ -72,7 +72,7 @@ end(void) {
 		.tv_nsec = 0
 	}, rem;
 
-	log_print("Ending...");
+	log_print("ending");
 
 	/* Notify spawns they should stop */
 	spawns_stop();
@@ -164,7 +164,7 @@ main(int argc,
 	configuration_init();
 	running = true;
 
-	log_print("Running...");
+	log_print("running");
 	while(running) {
 		int fds;
 		fd_set *readfdsp, *writefdsp, *errorfdsp;

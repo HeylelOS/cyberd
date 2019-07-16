@@ -23,6 +23,42 @@ enum daemon_conf_section {
 	SECTION_UNKNOWN,
 };
 
+static const struct signalpair {
+	const int signum;
+	const char signame[10];
+} signals[] = {
+	{ SIGABRT,   "SIGABRT"   },
+	{ SIGALRM,   "SIGALRM"   },
+	{ SIGBUS,    "SIGBUS"    },
+	{ SIGCHLD,   "SIGCHLD"   },
+	{ SIGCONT,   "SIGCONT"   },
+	{ SIGFPE,    "SIGFPE"    },
+	{ SIGHUP,    "SIGHUP"    },
+	{ SIGILL,    "SIGILL"    },
+	{ SIGINT,    "SIGINT"    },
+	{ SIGKILL,   "SIGKILL"   },
+	{ SIGPIPE,   "SIGPIPE"   },
+	{ SIGQUIT,   "SIGQUIT"   },
+	{ SIGSEGV,   "SIGSEGV"   },
+	{ SIGSTOP,   "SIGSTOP"   },
+	{ SIGTERM,   "SIGTERM"   },
+	{ SIGTSTP,   "SIGTSTP"   },
+	{ SIGTTIN,   "SIGTTIN"   },
+	{ SIGTTOU,   "SIGTTOU"   },
+	{ SIGUSR1,   "SIGUSR1"   },
+	{ SIGUSR2,   "SIGUSR2"   },
+#ifndef __APPLE__
+	{ SIGPOLL,   "SIGPOLL"   },
+#endif
+	{ SIGPROF,   "SIGPROF"   },
+	{ SIGSYS,    "SIGSYS"    },
+	{ SIGTRAP,   "SIGTRAP"   },
+	{ SIGURG,    "SIGURG"    },
+	{ SIGVTALRM, "SIGVTALRM" },
+	{ SIGXCPU,   "SIGXCPU"   },
+	{ SIGXFSZ,   "SIGXFSZ"   }
+};
+
 /**
  * Resolves a user name to a user uid
  * @param user User name or integral id of the desired uid
@@ -40,13 +76,13 @@ daemon_conf_parse_general_uid(const char *user, uid_t *uidp) {
 			unsigned long luid = strtoul(user, &end, 10);
 
 			if(*user == '\0' || *end != '\0') {
-				log_error("Unable to infer uid from '%s'", user);
+				log_error("daemon_conf: Unable to infer uid from '%s'", user);
 				return -1;
 			} else {
 				*uidp = (uid_t) luid;
 			}
 		} else {
-			log_error("Unable to infer uid from '%s', getpwnam: %m", user);
+			log_error("daemon_conf: Unable to infer uid from '%s', getpwnam: %m", user);
 			return -1;
 		}
 	} else {
@@ -73,13 +109,13 @@ daemon_conf_parse_general_gid(const char *group, gid_t *gidp) {
 			unsigned long lgid = strtoul(group, &end, 10);
 
 			if(*group == '\0' || *end != '\0') {
-				log_error("Unable to infer gid from '%s'", group);
+				log_error("daemon_conf: Unable to infer gid from '%s'", group);
 				return -1;
 			} else {
 				*gidp = (gid_t) lgid;
 			}
 		} else {
-			log_error("Unable to infer gid from '%s', getgrnam: %m", group);
+			log_error("daemon_conf: Unable to infer gid from '%s', getgrnam: %m", group);
 			return -1;
 		}
 	} else {
@@ -89,78 +125,39 @@ daemon_conf_parse_general_gid(const char *group, gid_t *gidp) {
 	return 0;
 }
 
+/**
+ * Resolves a signal name to a signal number
+ * @param signalname nul terminated string of the signal
+ * @param signalp Return value of the signal number if the call is successfull
+ * @return 0 on success -1 else
+ */
 static int
-daemon_conf_parse_general_signal(const char *signalname, int *signalp) {
+daemon_conf_parse_general_signal(const char *signame, int *signump) {
 
-	if(isdigit(*signalname)) {
+	if(isdigit(*signame)) {
 			char *end;
-			unsigned long lsignal = strtoul(signalname, &end, 10);
+			unsigned long lsignum = strtoul(signame, &end, 10);
 
-			if(*end == '\0' && lsignal <= ((unsigned int)-1 >> 1)) {
-				log_error("Unable to infer decimal signal from '%s'", signalname);
-				return -1;
+			if(*end != '\0' && lsignum <= ((unsigned int)-1 >> 1)) {
+				*signump = (int) lsignum;
 			} else {
-				*signalp = (int) lsignal;
+				log_error("daemon_conf: Unable to infer decimal signal from '%s'", signame);
+				return -1;
 			}
-	} else if(strcmp("SIGABRT", signalname) == 0) {
-		*signalp = SIGABRT;
-	} else if(strcmp("SIGALRM", signalname) == 0) {
-		*signalp = SIGALRM;
-	} else if(strcmp("SIGBUS", signalname) == 0) {
-		*signalp = SIGBUS;
-	} else if(strcmp("SIGCHLD", signalname) == 0) {
-		*signalp = SIGCHLD;
-	} else if(strcmp("SIGCONT", signalname) == 0) {
-		*signalp = SIGCONT;
-	} else if(strcmp("SIGFPE", signalname) == 0) {
-		*signalp = SIGFPE;
-	} else if(strcmp("SIGHUP", signalname) == 0) {
-		*signalp = SIGHUP;
-	} else if(strcmp("SIGILL", signalname) == 0) {
-		*signalp = SIGILL;
-	} else if(strcmp("SIGINT", signalname) == 0) {
-		*signalp = SIGINT;
-	} else if(strcmp("SIGKILL", signalname) == 0) {
-		*signalp = SIGKILL;
-	} else if(strcmp("SIGPIPE", signalname) == 0) {
-		*signalp = SIGPIPE;
-	} else if(strcmp("SIGQUIT", signalname) == 0) {
-		*signalp = SIGQUIT;
-	} else if(strcmp("SIGSEGV", signalname) == 0) {
-		*signalp = SIGSEGV;
-	} else if(strcmp("SIGSTOP", signalname) == 0) {
-		*signalp = SIGSTOP;
-	} else if(strcmp("SIGTERM", signalname) == 0) {
-		*signalp = SIGTERM;
-	} else if(strcmp("SIGTSTP", signalname) == 0) {
-		*signalp = SIGTSTP;
-	} else if(strcmp("SIGTTIN", signalname) == 0) {
-		*signalp = SIGTTIN;
-	} else if(strcmp("SIGTTOU", signalname) == 0) {
-		*signalp = SIGTTOU;
-	} else if(strcmp("SIGUSR1", signalname) == 0) {
-		*signalp = SIGUSR1;
-	} else if(strcmp("SIGUSR2", signalname) == 0) {
-		*signalp = SIGUSR2;
-	} else if(strcmp("SIGPOLL", signalname) == 0) {
-		*signalp = SIGPOLL;
-	} else if(strcmp("SIGPROF", signalname) == 0) {
-		*signalp = SIGPROF;
-	} else if(strcmp("SIGSYS", signalname) == 0) {
-		*signalp = SIGSYS;
-	} else if(strcmp("SIGTRAP", signalname) == 0) {
-		*signalp = SIGTRAP;
-	} else if(strcmp("SIGURG", signalname) == 0) {
-		*signalp = SIGURG;
-	} else if(strcmp("SIGVTALRM", signalname) == 0) {
-		*signalp = SIGVTALRM;
-	} else if(strcmp("SIGXCPU", signalname) == 0) {
-		*signalp = SIGXCPU;
-	} else if(strcmp("SIGXFSZ", signalname) == 0) {
-		*signalp = SIGXFSZ;
 	} else {
-		log_error("Unable to infer signal from '%s'", signalname);
-		return -1;
+		const struct signalpair *current = signals;
+
+		while(current != signals + sizeof(signals)
+			&& strcmp(current->signame, signame) != 0) {
+			current++;
+		}
+
+		if(current != signals + sizeof(signals)) {
+			*signump = current->signum;
+		} else {
+			log_error("daemon_conf: Unable to infer signal from name '%s'", signame);
+			return -1;
+		}
 	}
 
 	return 0;
@@ -345,9 +342,25 @@ daemon_conf_parse_start(struct daemon_conf *conf,
 
 	if(value == NULL) {
 		if(strcmp(key, "load") == 0) {
-			conf->startmask |= DAEMON_START_LOAD;
+			conf->start.load = 1;
 		} else if(strcmp(key, "reload") == 0) {
-			conf->startmask |= DAEMON_START_RELOAD;
+			conf->start.reload = 1;
+		} else if(strcmp(key, "any exit") == 0) {
+			conf->start.exitsuccess = 1;
+			conf->start.exitfailure = 1;
+			conf->start.killed = 1;
+			conf->start.dumped = 1;
+		} else if(strcmp(key, "exit") == 0) {
+			conf->start.exitsuccess = 1;
+			conf->start.exitfailure = 1;
+		} else if(strcmp(key, "exit success") == 0) {
+			conf->start.exitsuccess = 1;
+		} else if(strcmp(key, "exit failure") == 0) {
+			conf->start.exitfailure = 1;
+		} else if(strcmp(key, "killed") == 0) {
+			conf->start.killed = 1;
+		} else if(strcmp(key, "dumped") == 0) {
+			conf->start.dumped = 1;
 		}
 	}
 
@@ -370,8 +383,12 @@ daemon_conf_init(struct daemon_conf *conf) {
 
 	conf->umask = CONFIG_DEFAULT_UMASK;
 
-	/* Zero'ing startmask */
-	conf->startmask = 0;
+	conf->start.load = 0;
+	conf->start.reload = 0;
+	conf->start.exitsuccess = 0;
+	conf->start.exitfailure = 0;
+	conf->start.killed = 0;
+	conf->start.dumped = 0;
 }
 
 void

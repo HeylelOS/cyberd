@@ -181,7 +181,7 @@ dispatcher_handle_controller(struct fde *controller) {
 				} else {
 					struct scheduler_activity activity = {
 						.when = control->planified.when,
-						.action = (int)control->command
+						.action = (int) control->command
 					};
 
 					if(COMMAND_IS_SYSTEM(control->command)

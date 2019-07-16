@@ -10,7 +10,7 @@
 #include <sys/un.h>
 #include <errno.h> /* to show overflow in fde_create_acceptor */
 
-#define SOCKADDR_UN_MAXLEN sizeof(((struct sockaddr_un *)NULL)->sun_path)
+#define SOCKADDR_UN_MAXLEN sizeof(((struct sockaddr_un *) NULL)->sun_path)
 
 struct fde *
 fde_create_acceptor(const char *name, perms_t perms) {
@@ -26,17 +26,17 @@ fde_create_acceptor(const char *name, perms_t perms) {
 	if(snprintf(addr.sun_path, SOCKADDR_UN_MAXLEN,
 		CONFIG_CONTROLLERS_DIRECTORY"/%s", name) >= SOCKADDR_UN_MAXLEN) {
 		errno = EOVERFLOW;
-		log_error("fde_create_acceptor %s: %m", name);
+		log_error("fde_create_acceptor '%s': %m", name);
 		goto fde_create_acceptor_err1;
 	}
 
 	if(bind(fd, (const struct sockaddr *)&addr, sizeof(addr)) != 0) {
-		log_error("fde_create_acceptor bind %s: %m", name);
+		log_error("fde_create_acceptor bind '%s': %m", name);
 		goto fde_create_acceptor_err1;
 	}
 
 	if(listen(fd, CONFIG_CONNECTIONS_LIMIT) != 0) {
-		log_error("fde_create_acceptor listen %s: %m", name);
+		log_error("fde_create_acceptor listen '%s': %m", name);
 		goto fde_create_acceptor_err2;
 	}
 
