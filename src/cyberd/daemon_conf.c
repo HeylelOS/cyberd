@@ -47,7 +47,9 @@ static const struct signalpair {
 	{ SIGTTOU,   "SIGTTOU"   },
 	{ SIGUSR1,   "SIGUSR1"   },
 	{ SIGUSR2,   "SIGUSR2"   },
+#ifndef __APPLE__
 	{ SIGPOLL,   "SIGPOLL"   },
+#endif
 	{ SIGPROF,   "SIGPROF"   },
 	{ SIGSYS,    "SIGSYS"    },
 	{ SIGTRAP,   "SIGTRAP"   },
