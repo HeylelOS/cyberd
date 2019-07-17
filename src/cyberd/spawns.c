@@ -26,6 +26,14 @@ spawns_preorder_stop(struct tree_node *node) {
 	if(node != NULL) {
 		struct daemon *daemon = node->element;
 
+		/* It's important to disallow daemons' restart when stopping */
+		daemon->conf.start.load = 0;
+		daemon->conf.start.reload = 0;
+		daemon->conf.start.exitsuccess = 0;
+		daemon->conf.start.exitfailure = 0;
+		daemon->conf.start.killed = 0;
+		daemon->conf.start.dumped = 0;
+
 		daemon_stop(daemon);
 
 		spawns_preorder_stop(node->left);
