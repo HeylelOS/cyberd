@@ -24,6 +24,7 @@ sections:
         "-c <name>": "Name of the new socket to create."
     "see also":
         cyberd: [ 8 ]
+        cyberd: [ 5 ]
     bugs:
         No known bugs.
     author: "Valentin Debon (valentin.debon@heylelos.org)"

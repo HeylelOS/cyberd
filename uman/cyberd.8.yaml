@@ -21,3 +21,4 @@ sections:
         Its lack of other functionalities is only a proof of its UNIX-philosophy compliance.
     "see also":
         cyberctl: [ 1 ]
+        cyberd: [ 5 ]
