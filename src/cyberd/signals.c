@@ -97,9 +97,13 @@ signals_init(void) {
 	sigfillset(&action.sa_mask);
 	action.sa_flags = 0;
 
+	/* The following is important, because if for any reason we cannot
+	open IPC sockets, we might not be able to stop cyberd properly */
 	action.sa_handler = sigterm_handler;
 	sigaction(SIGTERM, &action, NULL);
+#ifdef CONFIG_DEBUG
 	sigaction(SIGINT, &action, NULL);
+#endif
 
 	action.sa_handler = sighup_handler;
 	sigaction(SIGHUP, &action, NULL);

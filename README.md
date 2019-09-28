@@ -16,11 +16,13 @@ So this init system just loads daemons and allows users to start, stop, signal a
 
 ## Features
 
-In this actual alpha state, cyberd can:
-- Start daemons, with command line arguments, at cyberd load or configuration reload.
-- Stop daemons, by sending them a SIGTERM signal.
-- Reload daemons, by sending a SIGHUP signal.
+cyberd can:
+- Start daemons, with command line arguments, custom uid, gid, umask and working directory. At cyberd load, configuration reload or a depending on a previous exit status.
+- Stop daemons, by sending them a SIGTERM or a custom signal.
+- Reload daemons, by sending a SIGHUP or a custom signal.
 - End daemons, by sending them a SIGKILL signal.
 - Poweroff, Halt, Reboot, Suspend kernel.
 - Create new IPC sockets with less or equal rights than the previous one.
+
+For further details, you can read the manual pages or even available tests for examples of simple daemons configurations.
 
