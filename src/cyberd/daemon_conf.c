@@ -25,38 +25,38 @@ enum daemon_conf_section {
 
 static const struct signalpair {
 	const int signum;
-	const char signame[10];
+	const char signame[7];
 } signals[] = {
-	{ SIGABRT,   "SIGABRT"   },
-	{ SIGALRM,   "SIGALRM"   },
-	{ SIGBUS,    "SIGBUS"    },
-	{ SIGCHLD,   "SIGCHLD"   },
-	{ SIGCONT,   "SIGCONT"   },
-	{ SIGFPE,    "SIGFPE"    },
-	{ SIGHUP,    "SIGHUP"    },
-	{ SIGILL,    "SIGILL"    },
-	{ SIGINT,    "SIGINT"    },
-	{ SIGKILL,   "SIGKILL"   },
-	{ SIGPIPE,   "SIGPIPE"   },
-	{ SIGQUIT,   "SIGQUIT"   },
-	{ SIGSEGV,   "SIGSEGV"   },
-	{ SIGSTOP,   "SIGSTOP"   },
-	{ SIGTERM,   "SIGTERM"   },
-	{ SIGTSTP,   "SIGTSTP"   },
-	{ SIGTTIN,   "SIGTTIN"   },
-	{ SIGTTOU,   "SIGTTOU"   },
-	{ SIGUSR1,   "SIGUSR1"   },
-	{ SIGUSR2,   "SIGUSR2"   },
+	{ SIGABRT,   "ABRT"   },
+	{ SIGALRM,   "ALRM"   },
+	{ SIGBUS,    "BUS"    },
+	{ SIGCHLD,   "CHLD"   },
+	{ SIGCONT,   "CONT"   },
+	{ SIGFPE,    "FPE"    },
+	{ SIGHUP,    "HUP"    },
+	{ SIGILL,    "ILL"    },
+	{ SIGINT,    "INT"    },
+	{ SIGKILL,   "KILL"   },
+	{ SIGPIPE,   "PIPE"   },
+	{ SIGQUIT,   "QUIT"   },
+	{ SIGSEGV,   "SEGV"   },
+	{ SIGSTOP,   "STOP"   },
+	{ SIGTERM,   "TERM"   },
+	{ SIGTSTP,   "TSTP"   },
+	{ SIGTTIN,   "TTIN"   },
+	{ SIGTTOU,   "TTOU"   },
+	{ SIGUSR1,   "USR1"   },
+	{ SIGUSR2,   "USR2"   },
 #ifndef __APPLE__
-	{ SIGPOLL,   "SIGPOLL"   },
+	{ SIGPOLL,   "POLL"   },
 #endif
-	{ SIGPROF,   "SIGPROF"   },
-	{ SIGSYS,    "SIGSYS"    },
-	{ SIGTRAP,   "SIGTRAP"   },
-	{ SIGURG,    "SIGURG"    },
-	{ SIGVTALRM, "SIGVTALRM" },
-	{ SIGXCPU,   "SIGXCPU"   },
-	{ SIGXFSZ,   "SIGXFSZ"   }
+	{ SIGPROF,   "PROF"   },
+	{ SIGSYS,    "SYS"    },
+	{ SIGTRAP,   "TRAP"   },
+	{ SIGURG,    "URG"    },
+	{ SIGVTALRM, "VTALRM" },
+	{ SIGXCPU,   "XCPU"   },
+	{ SIGXFSZ,   "XFSZ"   }
 };
 
 /**
@@ -145,17 +145,22 @@ daemon_conf_parse_general_signal(const char *signame, int *signump) {
 				return -1;
 			}
 	} else {
-		const struct signalpair *current = signals;
+		const struct signalpair *current = signals,
+			* const signalsend = signals + sizeof(signals) / sizeof(*signals);
 
-		while(current != signals + sizeof(signals)
-			&& strcmp(current->signame, signame) != 0) {
+		if(strncasecmp("SIG", signame, 3) == 0) {
+			signame += 3;
+		}
+
+		while(current != signalsend
+			&& strcasecmp(current->signame, signame) != 0) {
 			current++;
 		}
 
-		if(current != signals + sizeof(signals)) {
+		if(current != signalsend) {
 			*signump = current->signum;
 		} else {
-			log_error("daemon_conf: Unable to infer signal from name '%s'", signame);
+			log_error("daemon_conf: Unable to infer signal number from name '%s'", signame);
 			return -1;
 		}
 	}
