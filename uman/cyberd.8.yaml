@@ -12,8 +12,8 @@ sections:
         cyberd is an init process meant for UNIX-like operating systems.
         It is neither a System V-like nor a BSD-like init system. It only supports daemons,
         and starts them upon configuration-load/reload.
-        Each daemon is associated with a file in the configuration directory (or directories).
-        On HeylelOS this directory is \fB/data/daemons\fR.
+        Each daemon is associated with a file in the configuration directory.
+        On HeylelOS the default directory is \fB/data/daemons\fR.
         Only one instance of a daemon can run at any time, and through cyberctl(1), you may start stop or end it.
 
     features:
