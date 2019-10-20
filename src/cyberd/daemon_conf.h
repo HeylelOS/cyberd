@@ -19,6 +19,7 @@ struct daemon_conf {
 	gid_t gid; /**< Group-id the process will be executed with */
 
 	mode_t umask; /**< umask of the daemon */
+	int priority; /**< Scheduling priority of the daemon */
 
 	struct {
 		unsigned load : 1;        /**< Must be started at init load */
