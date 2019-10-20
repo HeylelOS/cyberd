@@ -21,8 +21,8 @@ sections:
         \fBumask=<octal numeric value>\fR: umask of the daemon, default to cyberd's one (022).
         \fBsigend=<signal name| signal number>\fR: Signal used to stop the daemon.
         \fBsigreload=<signal name| signal number>\fR: Signal used to reload the daemon's configuration.
-        \fBarguments=<argument list>\fR: Argument list of the binary, if not present, the first argument will be the daemon's name. This list undergoes limited shell substitution, without command and failing if any unknown environment is used.
-    environment: The environment section is only composed of associative values, and will compose the daemon's environment variables. Those variables will not be used for the previous \fBarguments\fR expansion.
+        \fBarguments=<argument list>\fR: Argument list of the binary, if not present, the first argument will be the daemon's name. The list is truncated according to spaces.
+    environment: The environment section is composed of associated values, any scalar value will be expanded to an associative value with itself, and will compose the daemon's environment variables.
     start: |
         \fBload\fR: Start the daemon when cyberd is starting.
         \fBreload\fR: Start the daemon when cyberd is reloading its configuration.
@@ -35,3 +35,4 @@ sections:
     "see also":
         cyberctl: [ 1 ]
         cyberd: [ 1 ]
+        isspace: [ 3 ]
