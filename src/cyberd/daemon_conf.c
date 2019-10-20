@@ -9,9 +9,10 @@
 #include <unistd.h>
 #include <pwd.h>
 #include <grp.h>
-#include <wordexp.h>
 #include <ctype.h>
 #include <errno.h>
+
+#define DAEMON_CONF_STRINGLIST_DEFAULT_CAPACITY 16
 
 /**
  * Section in the configuration file
@@ -58,6 +59,62 @@ static const struct signalpair {
 	{ SIGXCPU,   "XCPU"   },
 	{ SIGXFSZ,   "XFSZ"   }
 };
+
+/**
+ * Frees a NULL-terminated list of strings
+ * @param stringlist List to deallocate, can be NULL
+ */
+static void
+daemon_conf_stringlist_free(char **stringlist) {
+	if(stringlist != NULL) {
+		for(char **iterator = stringlist;
+			*iterator != NULL; iterator++) {
+			free(*iterator);
+		}
+		free(stringlist);
+	}
+}
+
+/**
+ * Append a string to a NULL-terminated list of strings
+ * @param string String to append, allocated previously for this purpose
+ * @param stringlist List of strings, can be NULL
+ * @param capacity capacity of the list of strings
+ * @return List of strings with the string appended
+ */
+static char **
+daemon_conf_stringlist_append(char *string, char **stringlist, size_t *capacity) {
+	size_t endindex;
+
+	if(stringlist == NULL) {
+		if((stringlist = malloc(DAEMON_CONF_STRINGLIST_DEFAULT_CAPACITY * sizeof(*stringlist))) == NULL) {
+			return NULL;
+		}
+
+		*stringlist = NULL;
+		*capacity = DAEMON_CONF_STRINGLIST_DEFAULT_CAPACITY;
+		endindex = 0;
+	} else {
+		char **iterator = stringlist;
+		while(*iterator != NULL) {
+			iterator++;
+		}
+		endindex = iterator - stringlist;
+	}
+
+	if(endindex == *capacity - 1) {
+		*capacity *= 2;
+		if((stringlist = realloc(stringlist, *capacity * sizeof(*stringlist))) == NULL) {
+			daemon_conf_stringlist_free(stringlist);
+			return NULL;
+		}
+	}
+
+	stringlist[endindex] = string;
+	stringlist[endindex + 1] = NULL;
+
+	return stringlist;
+}
 
 /**
  * Resolves a user name to a user uid
@@ -169,50 +226,83 @@ daemon_conf_parse_general_signal(const char *signame, int *signump) {
 }
 
 /**
- * Performs a shell expansion on a line of arguments
- * @param args Line of arguments to expand
+ * Determines next argument
+ * @param currentp Pointer to the beginning of the previous argument
+ * @param currentendp Pointer to the end of the previous argument
+ * @return first character of argument or '\0' if end reached
+ */
+static inline char
+daemon_conf_parse_general_arguments_next(const char ** restrict currentp,
+	const char ** restrict currentendp) {
+	const char *current = *currentp, *currentend = *currentendp;
+
+	for(current = currentend; isspace(*current); current++);
+	for(currentend = current; *currentend != '\0' && !isspace(*currentend); currentend++);
+
+	*currentp = current;
+	*currentendp = currentend;
+
+	return *current;
+}
+
+/**
+ * @param args Line of arguments to parse
  * @return List of arguments, NULL terminated
  */
-static char **
-daemon_conf_parse_general_expand_arguments(const char *args) {
-	wordexp_t p;
-	char **arguments = NULL;
+static int
+daemon_conf_parse_general_arguments(const char *args, char ***argumentsp) {
+	const char *current, *currentend = args;
+	char *argument = NULL;
+	size_t capacity = 0;
 
-	if(wordexp(args, &p, WRDE_NOCMD | WRDE_UNDEF) == 0) {
-		if(p.we_wordc >= 1) {
-			size_t total = 0;
-			int i;
+	daemon_conf_stringlist_free(*argumentsp);
+	*argumentsp = NULL;
 
-			for(i = 0; i < p.we_wordc; i += 1) {
-				total += strlen(p.we_wordv[i]) + 1;
-			}
+	while(daemon_conf_parse_general_arguments_next(&current, &currentend) != '\0'
+		&& (argument = strndup(current, currentend - current)) != NULL
+		&& (*argumentsp = daemon_conf_stringlist_append(argument, *argumentsp, &capacity)) != NULL);
 
-			arguments = malloc((p.we_wordc + 1) * sizeof(char *) + total);
+	if(argument == NULL) {
+		daemon_conf_stringlist_free(*argumentsp);
+		*argumentsp = NULL;
 
-			if(arguments != NULL) {
-				char *str = (char *)(arguments + p.we_wordc + 1);
+		log_error("daemon_conf: Unable to parse argument list '%s'", args);
 
-				for(i = 0; i < p.we_wordc; i += 1) {
-					arguments[i] = str;
-					str = stpcpy(str, p.we_wordv[i]) + 1;
-				}
-				arguments[i] = NULL;
-			}
-		} else {
-			log_error("daemon_conf_parse: Argument list must have at least one argument");
-		}
-
-		wordfree(&p);
+		return -1;
 	}
 
-	return arguments;
+	return 0;
+}
+
+/**
+ * Parses a priority, must be between -20 and 20
+ * @param prio Priority to parse
+ * @param priorityp Pointer to the priority to set
+ * @return 0 on success, -1 else
+ */
+static int
+daemon_conf_parse_general_priority(const char *prio, int *priorityp) {
+	char *prioend;
+	long lpriority = strtol(prio, &prioend, 10);
+
+	if(*prio == '\0' || *prioend != '\0'
+		|| lpriority < -20 || lpriority > 20) {
+
+		log_error("daemon_conf: Unable to parse priority '%s'", prio);
+
+		return -1;
+	}
+
+	*priorityp = (int)lpriority;
+
+	return 0;
 }
 
 /**
  * Parses an element of the general section
  * @param conf Configuration being parsed
- * @key Key of the parameters value
- * @value Value associated to key, can be NULL
+ * @param key Key of the parameters value
+ * @param value Value associated to key, can be NULL
  * @return 0 on success or unknown key, -1 else
  */
 static int
@@ -266,18 +356,30 @@ daemon_conf_parse_general(struct daemon_conf *conf,
 				return -1;
 			}
 		} else if(strcmp(key, "arguments") == 0) {
-			char **arguments = daemon_conf_parse_general_expand_arguments(value);
-
-			if(arguments == NULL) {
+			if(daemon_conf_parse_general_arguments(value, &conf->arguments) == -1) {
 				return -1;
 			}
-
-			free(conf->arguments);
-			conf->arguments = arguments;
+		} else if(strcmp(key, "priority") == 0) {
+			if(daemon_conf_parse_general_priority(value, &conf->priority) == -1) {
+				return -1;
+			}
 		}
 	}
 
 	return 0;
+}
+
+static char *
+daemon_conf_envdup(const char *name) {
+	const size_t length = strlen(name);
+	char *string = malloc(length * 2 + 2);
+
+	if(string != NULL) {
+		*stpncpy(string, name, length) = '=';
+		strncpy(string + length + 1, name, length);
+	}
+
+	return string;
 }
 
 /**
@@ -288,50 +390,14 @@ daemon_conf_parse_general(struct daemon_conf *conf,
  * @return 0 on success or unknown key, -1 else
  */
 static int
-daemon_conf_parse_environment(struct daemon_conf *conf, const char *string, size_t *envcapp) {
+daemon_conf_parse_environment(struct daemon_conf *conf, const char *str, size_t *envcapp) {
+	char *string = strchr(str, '=') == NULL ? daemon_conf_envdup(str) : strdup(str);
 
-	if(strchr(string, '=') != NULL) {
-		size_t end;
-
-		if(conf->environment == NULL) {
-			end = 0;
-			*envcapp = 16;
-			conf->environment = malloc(sizeof(*conf->environment) * *envcapp);
-
-			if(conf->environment == NULL) {
-				*envcapp = 0;
-				return -1;
-			}
-		} else {
-			char **env = conf->environment;
-			while(*env != NULL) {
-				env++;
-			}
-			end = env - conf->environment;
-
-			if(*envcapp == end) {
-				char **newenvironment = realloc(conf->environment, sizeof(*conf->environment) * *envcapp * 2);
-
-				if(newenvironment == NULL) {
-					return -1;
-				}
-
-				conf->environment = newenvironment;
-				*envcapp *= 2;
-			}
-		}
-
-		if((conf->environment[end] = strdup(string)) == NULL) {
-			return -1;
-		}
-		conf->environment[end + 1] = NULL;
-
-		return 0;
-	} else {
-		log_error("daemon_conf_parse: Environment variable must be of type <key>=<value>, found '%s'", string);
+	if(string != NULL) {
+		conf->environment = daemon_conf_stringlist_append(string, conf->environment, envcapp);
 	}
 
-	return -1;
+	return conf->environment != NULL ? 0 : -1;
 }
 
 /**
@@ -387,6 +453,7 @@ daemon_conf_init(struct daemon_conf *conf) {
 	conf->gid = getgid();
 
 	conf->umask = CONFIG_DEFAULT_UMASK;
+	conf->priority = 0;
 
 	conf->start.load = 0;
 	conf->start.reload = 0;
@@ -400,18 +467,9 @@ void
 daemon_conf_deinit(struct daemon_conf *conf) {
 
 	free(conf->path);
-	free(conf->arguments);
-	if(conf->environment != NULL) {
-		char **env = conf->environment;
-
-		while(*env != NULL) {
-			free(*env);
-			env++;
-		}
-
-		free(conf->environment);
-	}
 	free(conf->wd);
+	daemon_conf_stringlist_free(conf->arguments);
+	daemon_conf_stringlist_free(conf->environment);
 }
 
 bool
@@ -425,13 +483,12 @@ daemon_conf_parse(struct daemon_conf *conf,
 
 	/* Reading lines */
 	while((length = getline(&line, &linecap, filep)) != -1) {
-		if(length != 0) {
+		if(length != 0 && line[length - 1] == '\n') {
 			line[length - 1] = '\0';
 		}
 
 		/* Reading beginning of section */
 		if(*line == '@') {
-
 			if(strcmp(line, "@general") == 0) {
 				section = SECTION_GENERAL;
 			} else if(strcmp(line, "@environment") == 0) {

@@ -9,7 +9,7 @@
 struct daemon_conf {
 	char *path; /**< Path of the executable file */
 	char **arguments; /**< Command line arguments, including process name */
-	char **environment; /**< Command line arguments, including process name */
+	char **environment; /**< Command line environment variables */
 	char *wd; /**< Working directory of the process */
 
 	int sigend; /**< Signal used to stop the process, default SIGTERM */
@@ -19,6 +19,7 @@ struct daemon_conf {
 	gid_t gid; /**< Group-id the process will be executed with */
 
 	mode_t umask; /**< umask of the daemon */
+	int priority; /**< Scheduling priority of the daemon */
 
 	struct {
 		unsigned load : 1;        /**< Must be started at init load */
