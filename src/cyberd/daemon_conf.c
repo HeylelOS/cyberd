@@ -231,7 +231,7 @@ daemon_conf_parse_general_signal(const char *signame, int *signump) {
  * @return first character of argument or '\0' if end reached
  */
 static inline char
-daemon_conf_parse_general_parse_arguments_next(const char ** restrict currentp,
+daemon_conf_parse_general_arguments_next(const char ** restrict currentp,
 	const char ** restrict currentendp) {
 	const char *current = *currentp, *currentend = *currentendp;
 
@@ -249,7 +249,7 @@ daemon_conf_parse_general_parse_arguments_next(const char ** restrict currentp,
  * @return List of arguments, NULL terminated
  */
 static int
-daemon_conf_parse_general_parse_arguments(const char *args, char ***argumentsp) {
+daemon_conf_parse_general_arguments(const char *args, char ***argumentsp) {
 	const char *current, *currentend = args;
 	char *argument = NULL;
 	size_t capacity = 0;
@@ -257,7 +257,7 @@ daemon_conf_parse_general_parse_arguments(const char *args, char ***argumentsp) 
 	daemon_conf_stringlist_free(*argumentsp);
 	*argumentsp = NULL;
 
-	while (daemon_conf_parse_general_parse_arguments_next(&current, &currentend) != '\0'
+	while (daemon_conf_parse_general_arguments_next(&current, &currentend) != '\0'
 		&& (argument = strndup(current, currentend - current)) != NULL
 		&& (*argumentsp = daemon_conf_stringlist_append(argument, *argumentsp, &capacity)) != NULL);
 
@@ -274,10 +274,31 @@ daemon_conf_parse_general_parse_arguments(const char *args, char ***argumentsp) 
 }
 
 /**
+ * Parses a priority, must be between -20 and 20
+ * @param prio Priority to parse
+ * @param priorityp Pointer to the priority to set
+ * @return 0 on success, -1 else
+ */
+static int
+daemon_conf_parse_general_priority(const char *prio, int *priorityp) {
+	char *prioend;
+	long lpriority = strtol(prio, &prioend, 10);
+
+	if (*prio == '\0' || *prioend != '\0' || lpriority < -20 || lpriority > 20) {
+		log_error("daemon_conf: Unable to parse priority '%s'", prio);
+		return -1;
+	}
+
+	*priorityp = (int)lpriority;
+
+	return 0;
+}
+
+/**
  * Parses an element of the general section
  * @param conf Configuration being parsed
- * @key Key of the parameters value
- * @value Value associated to key, can be NULL
+ * @param key Key of the parameters value
+ * @param value Value associated to key, can be NULL
  * @return 0 on success or unknown key, -1 else
  */
 static int
@@ -330,7 +351,11 @@ daemon_conf_parse_general(struct daemon_conf *conf,
 				return -1;
 			}
 		} else if (strcmp(key, "arguments") == 0) {
-			if (daemon_conf_parse_general_parse_arguments(value, &conf->arguments) == -1) {
+			if (daemon_conf_parse_general_arguments(value, &conf->arguments) == -1) {
+				return -1;
+			}
+		} else if (strcmp(key, "priority") == 0) {
+			if (daemon_conf_parse_general_priority(value, &conf->priority) == -1) {
 				return -1;
 			}
 		}
@@ -423,6 +448,7 @@ daemon_conf_init(struct daemon_conf *conf) {
 	conf->gid = getgid();
 
 	conf->umask = CONFIG_DEFAULT_UMASK;
+	conf->priority = 0;
 
 	conf->start.load = 0;
 	conf->start.reload = 0;

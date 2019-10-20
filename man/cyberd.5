@@ -33,7 +33,9 @@ Scalar values consist of any value without an '=' character. Whereas assocative 
 .br
 \fBsigreload=<signal name| signal number>\fR: Signal used to reload the daemon's configuration.
 .br
-\fBarguments=<argument list>\fR: Argument list of the binary, if not present, the first argument will be the daemon's name. The list is truncated according to spaces.
+\fBarguments=<argument list>\fR: Argument list of the process, if not present, the first argument will be the daemon's name. The list is truncated according to spaces.
+.br
+\fBpriority=<priority>\fR: Priority of the newly created daemon, must be between \-20 and 20, default to 0.
 .br
 
 .SH "ENVIRONMENT"
@@ -57,4 +59,4 @@ The environment section is composed of associated values, any scalar value will 
 .br
 
 .SH "SEE ALSO"
-isspace(3), cyberd(1), cyberctl(1)
+isspace(3), cyberctl(1), cyberd(8)

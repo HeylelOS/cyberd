@@ -23,8 +23,7 @@ sections:
         "-t when": "The when specifies the unix timestamp at which the command may be executed."
         "-c <name>": "Name of the new socket to create."
     "see also":
-        cyberd: [ 8 ]
-        cyberd: [ 5 ]
+        cyberd: [ 5, 8 ]
     bugs:
         No known bugs.
     author: "Valentin Debon (valentin.debon@heylelos.org)"

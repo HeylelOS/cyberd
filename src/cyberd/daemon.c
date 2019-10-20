@@ -103,6 +103,13 @@ daemon_child_setup_ids(struct daemon *daemon) {
 		return -1;
 	}
 
+#ifndef CONFIG_DEBUG
+	if (setsid() == -1) {
+		warn("Unable to setup '%s' daemon session id", daemon->name);
+		return -1;
+	}
+#endif
+
 	return 0;
 }
 
@@ -138,9 +145,10 @@ daemon_child_setup(struct daemon *daemon) {
 
 	if (daemon_child_setup_fds(daemon) == 0
 		&& daemon_child_setup_workdir(daemon) == 0
-		&& daemon_child_setup_ids(daemon) == 0) {
-		if (execve(daemon->conf.path,
-			daemon_child_argv(daemon), daemon_child_envp(daemon)) == -1) {
+		&& daemon_child_setup_ids(daemon) == 0
+		&& setpriority(PRIO_PROCESS, 0, daemon->conf.priority) == 0) {
+		if (execve(daemon->conf.path, daemon_child_argv(daemon),
+			daemon_child_envp(daemon)) == -1) {
 			warn("Unable to execve '%s'", daemon->conf.path);
 		}
 	}

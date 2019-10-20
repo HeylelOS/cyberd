@@ -39,6 +39,10 @@ log_print(const char *format, ...) {
 
 	va_start(ap, format);
 	vsyslog(LOG_INFO, format, ap);
+#ifdef CONFIG_DEBUG
+	vprintf(format, ap);
+	putchar('\n');
+#endif
 	va_end(ap);
 }
 
@@ -48,6 +52,10 @@ log_error(const char *format, ...) {
 
 	va_start(ap, format);
 	vsyslog(LOG_ERR, format, ap);
+#ifdef CONFIG_DEBUG
+	vfprintf(stderr, format, ap);
+	putc('\n', stderr);
+#endif
 	va_end(ap);
 }
 
