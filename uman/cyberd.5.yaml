@@ -21,7 +21,8 @@ sections:
         \fBumask=<octal numeric value>\fR: umask of the daemon, default to cyberd's one (022).
         \fBsigend=<signal name| signal number>\fR: Signal used to stop the daemon.
         \fBsigreload=<signal name| signal number>\fR: Signal used to reload the daemon's configuration.
-        \fBarguments=<argument list>\fR: Argument list of the binary, if not present, the first argument will be the daemon's name. The list is truncated according to spaces.
+        \fBarguments=<argument list>\fR: Argument list of the process, if not present, the first argument will be the daemon's name. The list is truncated according to spaces.
+        \fBpriority=<priority>\fR: Priority of the newly created daemon, must be between -20 and 20, default to 0.
     environment: The environment section is composed of associated values, any scalar value will be expanded to an associative value with itself, and will compose the daemon's environment variables.
     start: |
         \fBload\fR: Start the daemon when cyberd is starting.
@@ -34,5 +35,5 @@ sections:
         \fBdumped\fR: Start the daemon when the daemon dumped core.
     "see also":
         cyberctl: [ 1 ]
-        cyberd: [ 1 ]
+        cyberd: [ 8 ]
         isspace: [ 3 ]
