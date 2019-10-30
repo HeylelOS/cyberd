@@ -121,12 +121,13 @@ signals_init(void) {
 	sigaction(SIGINT, &action, NULL);
 #endif
 
-	/* The following can have the SA_RESTART flag because when
-	called during pselect(2), they do not modify any main loop's
-	variable, except for sighup_handler which empties the scheduler */
-	action.sa_flags = SA_RESTART;
 	action.sa_handler = sighup_handler;
 	sigaction(SIGHUP, &action, NULL);
+
+	/* The following can have the SA_RESTART flag because when
+	called during pselect(2), it doesn't modify any main loop's variable,
+	sighup_handler cannot as it empties the scheduler */
+	action.sa_flags = SA_RESTART;
 	action.sa_handler = sigchld_handler;
 	sigaction(SIGCHLD, &action, NULL);
 
