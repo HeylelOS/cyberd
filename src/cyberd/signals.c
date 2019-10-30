@@ -89,31 +89,53 @@ void
 signals_init(void) {
 	struct sigaction action;
 
-	/* Define process' blocked signals */
-	sigfillset(&initsigset);
+	/**
+	 * NOTE: Linux specifies that any signal for which
+	 * init hasn't set a signal handler will not be received,
+	 * however this behavior may not be consistent through other implementations.
+	 * Blocking all signals is not a solution as a malicious program might fill
+	 * our pending signals queue with blocked ones, preventing receptions of useful ones.
+	 * The solution might be to SIG_IGN all signals, but that wouldn't prevent SIGKILL
+	 * and SIGSTOP, and we have no mean of knowing every system's signals from libc.
+	 */
+
+	/* Define blocked signals when not in pselect(2) */
+	sigemptyset(&initsigset);
+	sigaddset(&initsigset, SIGTERM);
+#ifdef CONFIG_DEBUG
+	sigaddset(&initsigset, SIGINT);
+#endif
+	sigaddset(&initsigset, SIGHUP);
+	sigaddset(&initsigset, SIGCHLD);
 	sigprocmask(SIG_SETMASK, &initsigset, NULL);
 
 	/* Init signal handlers */
 	sigfillset(&action.sa_mask);
-	action.sa_flags = 0;
 
 	/* The following is important, because if for any reason we cannot
 	open IPC sockets, we might not be able to stop cyberd properly */
+	action.sa_flags = 0;
 	action.sa_handler = sigterm_handler;
 	sigaction(SIGTERM, &action, NULL);
 #ifdef CONFIG_DEBUG
 	sigaction(SIGINT, &action, NULL);
 #endif
 
+	/* The following can have the SA_RESTART flag because when
+	called during pselect(2), they do not modify any main loop's
+	variable, except for sighup_handler which empties the scheduler */
+	action.sa_flags = SA_RESTART;
 	action.sa_handler = sighup_handler;
 	sigaction(SIGHUP, &action, NULL);
-
 	action.sa_handler = sigchld_handler;
 	sigaction(SIGCHLD, &action, NULL);
 
 	/* Define pselect's non blocked signals */
+	sigfillset(&initsigset);
 	sigdelset(&initsigset, SIGTERM);
+#ifdef CONFIG_DEBUG
 	sigdelset(&initsigset, SIGINT);
+#endif
 	sigdelset(&initsigset, SIGHUP);
 	sigdelset(&initsigset, SIGCHLD);
 }

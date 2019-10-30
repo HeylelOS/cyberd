@@ -103,12 +103,10 @@ daemon_child_setup_ids(struct daemon *daemon) {
 		return -1;
 	}
 
-#ifndef CONFIG_DEBUG
 	if (setsid() == -1) {
 		warn("Unable to setup '%s' daemon session id", daemon->name);
 		return -1;
 	}
-#endif
 
 	return 0;
 }
