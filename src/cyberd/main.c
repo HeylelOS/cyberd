@@ -82,7 +82,9 @@ end(void) {
 	signals_stopping();
 
 	/* While there are spawns, and we didn't time out,
-	we wait spawns for 5 seconds */
+	we wait spawns for 5 seconds. In theory we set SA_RESTART for
+	SIGCHLD, but the behaviour might not be consistent upon implementations,
+	so let's keep EINTR handling. */
 	while(!spawns_empty()
 		&& nanosleep(&req, &rem) == -1
 		&& errno == EINTR) {
@@ -180,6 +182,7 @@ main(int argc,
 		timeoutp = scheduler_next();
 
 		/* Wait for action */
+		errno = 0;
 		fds = pselect(fds,
 			readfdsp, writefdsp, errorfdsp,
 			timeoutp,
