@@ -25,8 +25,8 @@ $(INSTALLDIRS):
 	mkdir $@
 
 $(CYBERD_BIN): $(CYBERD_SRC) $(BUILDDIR)
-	$(CC) -I./src $(CFLAGS) $(LDFLAGS) -o $@ $(CYBERD_SRC)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(CYBERD_SRC)
 
 $(CYBERCTL_BIN): $(CYBERCTL_SRC) $(BUILDDIR)
-	$(CC) -I./src $(CFLAGS) $(LDFLAGS) -o $@ $(CYBERCTL_SRC)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(CYBERCTL_SRC)
 

@@ -26,7 +26,7 @@ Some influential environment variables:
   NAME            cyber{d,ctl} executables name [cyber]
 
   CC              C compiler command [cc]
-  CFLAGS          C compiler flags [-O3 -Wall -fPIC] when -r specified, [-g -Wall -fPIC] else
+  CFLAGS          C compiler flags [-O3 -Wall -fPIC] when -r specified, [-g -Wall -fPIC -DCONFIG_DEBUG] else
   LDFLAGS         linker flags []
 
   DAEMONCONFS     where will daemon configurations be set [/etc/daemons] when -r specified, [$PWD/test/cyberd/daemons] else
@@ -106,7 +106,7 @@ cat - Makefile.part <<EOF > Makefile
 NAME=$NAME
 
 CC=$CC
-CFLAGS=$CFLAGS
+CFLAGS=-Iinclude $CFLAGS
 LDFLAGS=$LDFLAGS
 
 BUILDDIR=$BUILDDIR
@@ -116,12 +116,12 @@ INSTALLMANDIR=$MANDIR
 INSTALLDIRS=\$(INSTALLBINDIR) \$(INSTALLMANDIR)
 EOF
 
-cat <<EOF > src/config.h
+cat <<EOF > include/config.h
 #ifndef CONFIG_H
 #define CONFIG_H
 
 #ifdef CONFIG_DEBUG
-#define CONFIG_FULL_CLEANUP 1
+#define CONFIG_FULL_CLEANUP
 #endif
 
 #define CONFIG_DAEMONCONFS_DIRECTORY "$DAEMONCONFS"
