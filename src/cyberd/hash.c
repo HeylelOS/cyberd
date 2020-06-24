@@ -4,8 +4,8 @@
 
 /* Should implement a better one, FNV hash will do temporarily */
 
-#define FNV_OFFSET_BASIS	0xCBF29CE484222325	
-#define FNV_PRIME		0x100000001B3
+#define FNV_OFFSET_BASIS 0xCBF29CE484222325	
+#define FNV_PRIME        0x100000001B3
 
 hash_t
 hash_string(const char *string) {
