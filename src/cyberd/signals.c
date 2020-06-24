@@ -102,7 +102,7 @@ signals_init(void) {
 	/* Define blocked signals when not in pselect(2) */
 	sigemptyset(&initsigset);
 	sigaddset(&initsigset, SIGTERM);
-#ifdef CONFIG_DEBUG
+#ifndef NDEBUG
 	sigaddset(&initsigset, SIGINT);
 #endif
 	sigaddset(&initsigset, SIGHUP);
@@ -117,7 +117,7 @@ signals_init(void) {
 	action.sa_flags = 0;
 	action.sa_handler = sigterm_handler;
 	sigaction(SIGTERM, &action, NULL);
-#ifdef CONFIG_DEBUG
+#ifndef NDEBUG
 	sigaction(SIGINT, &action, NULL);
 #endif
 
@@ -134,7 +134,7 @@ signals_init(void) {
 	/* Define pselect's non blocked signals */
 	sigfillset(&initsigset);
 	sigdelset(&initsigset, SIGTERM);
-#ifdef CONFIG_DEBUG
+#ifndef NDEBUG
 	sigdelset(&initsigset, SIGINT);
 #endif
 	sigdelset(&initsigset, SIGHUP);

@@ -1,7 +1,5 @@
 #!/bin/sh
 
-CONFIG_DEBUG=1
-
 while getopts hrd opt
 do
 	case $opt in
@@ -16,125 +14,110 @@ VAR=VALUE.  See below for descriptions of some of the useful variables.
 Defaults for the options are specified in brackets.
 
 Configuration:
-  -h                      display this help and exit
+  -h               display this help and exit
 
 Optional Features:
-  -d                      configure a debug build (default)
-  -r                      configure a release build
+  -d               configure a debug build (default)
+  -r               configure a release build
 
 Some influential environment variables:
-  NAME            cyber{d,ctl} executables name [cyber]
-
-  CC              C compiler command [cc]
-  CFLAGS          C compiler flags [-O3 -Wall -fPIC] when -r specified, [-g -Wall -fPIC -DCONFIG_DEBUG] else
-  LDFLAGS         linker flags []
-
-  DAEMONCONFS     where will daemon configurations be set [/etc/daemons] when -r specified, [$PWD/test/cyberd/daemons] else
-  IPCSOCKETS      where will IPC sockets be created [/var/init] when -r specified, [$PWD/test/cyberd] else
-
-  PREFIX          where to install files [/usr/local]
-  BINDIR          where to install executables [\$PREFIX/bin]
-  MANDIR          where to install manpages [\$PREFIX/man]
-  BUILDDIR        where the binaries and documentations will be built [./build]
+  BINARIES         where binary executables are built.
+  LIBRARIES        where libraries are built.
+  OBJECTS          where intermediate object files are built.
+  MKDIR            tool used to create objects subdirectories.
+  LD               linker to use.
+  LDFLAGS          arguments to pass to the linker.
+  CC               C compiler to use, default [clang gcc tcc cc].
+  CFLAGS           C compiler flags [-O -Wall -fPIC -DNDEBUG -Iinclude] when -r specified, [-g -Wall -fPIC -Iinclude] else.
+  CYBERCTLFLAGS
+  CYBERDFLAGS
 
 Use these variables to override the choices made by \`configure' or to help
 it to find libraries and programs with nonstandard names/locations.
 
 Report bugs to the package provider.
 EOF
-		exit 2 ;;
-	r) unset CONFIG_DEBUG ;;
-	d) CONFIG_DEBUG=1 ;;
-	?) echo "Unknown option: $opt" ;;
+		exit 1 ;;
+	r) NDEBUG="${opt}" ;;
+	d) unset NDEBUG ;;
+	?) echo "Unknown option: ${opt}" ;;
 	esac
 done
 
 shift $((OPTIND - 1))
 [ ! -z "$*" ] && export -- "$@"
 
-# Generic
-[ -z "$NAME" ] && NAME='cyber'
+case "`uname -s`" in
+Darwin) [ -z "${LDFLAGS}" ] && LDFLAGS='-lSystem' ;;
+Linux) [ -z "${LDFLAGS}" ] && LDFLAGS='-lc' ;;
+*) printf 'Unsupported operating system\n' && exit 1 ;;
+esac
 
-# Compilation
-if [ -z "$CC" ]
+if [ -z "${CC}" ]
 then
-	for CC in clang gcc cc
-	do [ ! -z `which "$CC"` ] && break
+	for CC in clang gcc tcc cc
+	do command -v "${CC}" && break
 	done
 fi
 
-if [ ! -z "$CC" ]
-then echo "Using C compiler '$CC'"
-else echo "Unable to find C compiler" ; exit 1
+if [ ! -z "${CC}" ]
+then printf "Using C compiler '%s'\n" "${CC}"
+else printf 'Unable to find C compiler\n' ; exit 1
 fi
 
-if [ -z "$CFLAGS" ]
+if [ -z "${CFLAGS}" ]
 then
-	if [ ! -z "$CONFIG_DEBUG" ]
-	then CFLAGS='-g -Wall -fPIC'
-	else CFLAGS='-O3 -Wall -fPIC'
+	if [ -z "${NDEBUG}" ]
+	then CFLAGS='-g -Wall -fPIC -Iinclude'
+	else CFLAGS='-O -Wall -fPIC -DNDEBUG -Iinclude'
 	fi
 fi
-[ ! -z "$CONFIG_DEBUG" ] && CFLAGS="$CFLAGS -DCONFIG_DEBUG"
-echo "Using C flags '$CFLAGS'"
+printf "Using C compiler flags '%s'\n" "${CFLAGS}"
 
-echo "Using Linker flags: '$LDFLAGS'"
-
-if [ -z "$DAEMONCONFS" ]
+if [ -z "${MKDIR}" ]
 then
-	if [ ! -z "$CONFIG_DEBUG" ]
-	then DAEMONCONFS="$PWD/test/cyberd/daemons"
-	else DAEMONCONFS='/etc/daemons'
-	fi
+	for MKDIR in mkdir
+	do command -v "${MKDIR}" && break
+	done
 fi
 
-if [ -z "$IPCSOCKETS" ]
-then
-	if [ ! -z "$CONFIG_DEBUG" ]
-	then IPCSOCKETS="$PWD/test/cyberd"
-	else IPCSOCKETS='/var/init'
-	fi
+if [ ! -z "${MKDIR}" ]
+then printf "Using mkdir '%s'\n" "${MKDIR}"
+else printf 'Unable to find mkdir\n' ; exit 1
 fi
 
-# Install
-[ -z "$PREFIX" ] && PREFIX='/usr/local'
-[ -z "$BINDIR" ] && BINDIR="$PREFIX/bin"
-[ -z "$MANDIR" ] && MANDIR="$PREFIX/man"
-[ -z "$BUILDDIR" ] && BUILDDIR='./build'
+if [ -z "${LD}" ]
+then
+	for LD in ld gold
+	do command -v "${LD}" && break
+	done
+fi
 
-cat - Makefile.part <<EOF > Makefile
-NAME=$NAME
+if [ ! -z "${LD}" ]
+then printf "Using linker '%s'\n" "${LD}"
+else printf 'Unable to find linker\n' ; exit 1
+fi
 
-CC=$CC
-CFLAGS=-Iinclude $CFLAGS
-LDFLAGS=$LDFLAGS
+[ -z "${CYBERCTLFLAGS}" ] && CYBERCTLFLAGS=""
+[ -z "${CYBERDFLAGS}" ] && CYBERDFLAGS=""
 
-BUILDDIR=$BUILDDIR
+[ -z "${BINARIES}" ] && BINARIES="build/bin"
+[ -z "${LIBRARIES}" ] && LIBRARIES="build/lib"
+[ -z "${OBJECTS}" ] && OBJECTS="build/objects"
+mkdir -p "${BINARIES}" "${LIBRARIES}" "${OBJECTS}"
 
-INSTALLBINDIR=$BINDIR
-INSTALLMANDIR=$MANDIR
-INSTALLDIRS=\$(INSTALLBINDIR) \$(INSTALLMANDIR)
+cat - Makefile.rules <<EOF > Makefile
+BINARIES=${BINARIES}
+LIBRARIES=${LIBRARIES}
+OBJECTS=${OBJECTS}
+
+MKDIR=${MKDIR}
+LD=${LD}
+LDFLAGS=${LDFLAGS}
+CC=${CC}
+CFLAGS=${CFLAGS}
+
+CYBERCTLFLAGS=${CYBERCTLFLAGS}
+CYBERDFLAGS=${CYBERDFLAGS}
+
 EOF
-
-cat <<EOF > include/config.h
-#ifndef CONFIG_H
-#define CONFIG_H
-
-#ifdef CONFIG_DEBUG
-#define CONFIG_FULL_CLEANUP
-#endif
-
-#define CONFIG_DAEMONCONFS_DIRECTORY "$DAEMONCONFS"
-#define CONFIG_CONTROLLERS_DIRECTORY "$IPCSOCKETS"
-
-#define CONFIG_DEFAULT_UMASK 022
-
-#define CONFIG_CONNECTIONS_LIMIT 64
-#define CONFIG_MAX_ACCEPTOR_LEN 255
-
-#define CONFIG_READ_BUFFER_SIZE 512
-
-/* CONFIG_H */
-#endif
-EOF
-

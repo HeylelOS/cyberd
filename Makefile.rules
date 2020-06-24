@@ -1,0 +1,45 @@
+.PHONY: all clean
+all:
+$(OBJECTS)/cyberctl:
+	$(MKDIR) -p $@
+$(OBJECTS)/cyberctl/main.o: src/cyberctl/main.c $(OBJECTS)/cyberctl
+	$(CC) $(CFLAGS) -c -o $@ $<
+$(BINARIES)/cyberctl: $(OBJECTS)/cyberctl/main.o
+	$(LD) $(LDFLAGS) $(CYBERCTLFLAGS) -o $@ $^
+$(OBJECTS)/cyberd:
+	$(MKDIR) -p $@
+$(OBJECTS)/cyberd/configuration.o: src/cyberd/configuration.c $(OBJECTS)/cyberd
+	$(CC) $(CFLAGS) -c -o $@ $<
+$(OBJECTS)/cyberd/daemon.o: src/cyberd/daemon.c $(OBJECTS)/cyberd
+	$(CC) $(CFLAGS) -c -o $@ $<
+$(OBJECTS)/cyberd/daemon_conf.o: src/cyberd/daemon_conf.c $(OBJECTS)/cyberd
+	$(CC) $(CFLAGS) -c -o $@ $<
+$(OBJECTS)/cyberd/dispatcher.o: src/cyberd/dispatcher.c $(OBJECTS)/cyberd
+	$(CC) $(CFLAGS) -c -o $@ $<
+$(OBJECTS)/cyberd/fde: $(OBJECTS)/cyberd
+	$(MKDIR) -p $@
+$(OBJECTS)/cyberd/fde/command_reader.o: src/cyberd/fde/command_reader.c $(OBJECTS)/cyberd/fde
+	$(CC) $(CFLAGS) -c -o $@ $<
+$(OBJECTS)/cyberd/fde/control.o: src/cyberd/fde/control.c $(OBJECTS)/cyberd/fde
+	$(CC) $(CFLAGS) -c -o $@ $<
+$(OBJECTS)/cyberd/fde.o: src/cyberd/fde.c $(OBJECTS)/cyberd
+	$(CC) $(CFLAGS) -c -o $@ $<
+$(OBJECTS)/cyberd/hash.o: src/cyberd/hash.c $(OBJECTS)/cyberd
+	$(CC) $(CFLAGS) -c -o $@ $<
+$(OBJECTS)/cyberd/log.o: src/cyberd/log.c $(OBJECTS)/cyberd
+	$(CC) $(CFLAGS) -c -o $@ $<
+$(OBJECTS)/cyberd/main.o: src/cyberd/main.c $(OBJECTS)/cyberd
+	$(CC) $(CFLAGS) -c -o $@ $<
+$(OBJECTS)/cyberd/scheduler.o: src/cyberd/scheduler.c $(OBJECTS)/cyberd
+	$(CC) $(CFLAGS) -c -o $@ $<
+$(OBJECTS)/cyberd/signals.o: src/cyberd/signals.c $(OBJECTS)/cyberd
+	$(CC) $(CFLAGS) -c -o $@ $<
+$(OBJECTS)/cyberd/spawns.o: src/cyberd/spawns.c $(OBJECTS)/cyberd
+	$(CC) $(CFLAGS) -c -o $@ $<
+$(OBJECTS)/cyberd/tree.o: src/cyberd/tree.c $(OBJECTS)/cyberd
+	$(CC) $(CFLAGS) -c -o $@ $<
+$(BINARIES)/cyberd: $(OBJECTS)/cyberd/configuration.o $(OBJECTS)/cyberd/daemon.o $(OBJECTS)/cyberd/daemon_conf.o $(OBJECTS)/cyberd/dispatcher.o $(OBJECTS)/cyberd/fde/command_reader.o $(OBJECTS)/cyberd/fde/control.o $(OBJECTS)/cyberd/fde.o $(OBJECTS)/cyberd/hash.o $(OBJECTS)/cyberd/log.o $(OBJECTS)/cyberd/main.o $(OBJECTS)/cyberd/scheduler.o $(OBJECTS)/cyberd/signals.o $(OBJECTS)/cyberd/spawns.o $(OBJECTS)/cyberd/tree.o
+	$(LD) $(LDFLAGS) $(CYBERDFLAGS) -o $@ $^
+all: $(BINARIES)/cyberctl $(BINARIES)/cyberd
+clean:
+	rm -rf $(BINARIES)/* $(LIBRARIES)/* $(OBJECTS)/*
