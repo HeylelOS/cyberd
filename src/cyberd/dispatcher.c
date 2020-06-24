@@ -71,7 +71,7 @@ dispatcher_init(void) {
 
 	tree_init(&dispatcher.fds, dispatcher_hash_fd);
 
-	if (mkdir(CONFIG_CONTROLLERS_DIRECTORY, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH) == 0
+	if (mkdir(CONFIG_CONTROLLERS_DIRECTORY, S_IRWXU | S_IRWXG | S_IRWXO) == 0
 		|| errno == EEXIST) { /* If it already exists, we postpone the error if its not a directory */
 		struct fde *acceptor
 			= fde_create_acceptor("initctl",
