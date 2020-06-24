@@ -49,7 +49,7 @@ begin(void) {
 
 	umask(CONFIG_DEFAULT_UMASK);
 
-#ifndef CONFIG_DEBUG
+#ifdef NDEBUG
 	if (getpid() != 1) {
 		errx(EXIT_FAILURE, "Must be run as pid 1");
 	}
