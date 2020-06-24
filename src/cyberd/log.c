@@ -6,17 +6,20 @@
 #include <stdarg.h>
 #include <stdbool.h>
 #include <syslog.h>
-#include <libgen.h>
 
 #define LOG_OPTIONS (LOG_PID | LOG_CONS | LOG_NDELAY | LOG_NOWAIT)
 
+#ifdef NDEBUG
+#include <libgen.h>
+
 static const char *ident;
+#endif
 
 void
 log_init(char *cyberdname) {
+#ifdef NDEBUG
 	ident = basename(cyberdname);
 
-#ifndef CONFIG_DEBUG
 	setlogmask(LOG_MASK(LOG_INFO) | LOG_MASK(LOG_ERR));
 	openlog(ident, LOG_OPTIONS, LOG_USER);
 #endif
@@ -25,7 +28,7 @@ log_init(char *cyberdname) {
 void
 log_deinit(void) {
 
-#ifndef CONFIG_DEBUG
+#ifdef NDEBUG
 	closelog();
 #endif
 }
@@ -33,7 +36,7 @@ log_deinit(void) {
 void
 log_restart(void) {
 
-#ifndef CONFIG_DEBUG
+#ifdef NDEBUG
 	closelog();
 	openlog(ident, LOG_OPTIONS, LOG_USER);
 #endif
@@ -44,7 +47,7 @@ log_print(const char *format, ...) {
 	va_list ap;
 
 	va_start(ap, format);
-#ifndef CONFIG_DEBUG
+#ifdef NDEBUG
 	vsyslog(LOG_INFO, format, ap);
 #else
 	vprintf(format, ap);
@@ -58,7 +61,7 @@ log_error(const char *format, ...) {
 	va_list ap;
 
 	va_start(ap, format);
-#ifndef CONFIG_DEBUG
+#ifdef NDEBUG
 	vsyslog(LOG_ERR, format, ap);
 #else
 	vfprintf(stderr, format, ap);

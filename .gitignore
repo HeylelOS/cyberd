@@ -1,4 +1,2 @@
-/build
-/test/cyberd/initctl
 /Makefile
-/include/config.h
+/build
