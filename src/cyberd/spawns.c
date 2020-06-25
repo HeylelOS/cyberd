@@ -5,10 +5,26 @@
 #include <stdlib.h>
 #include <sys/wait.h>
 
-static struct tree spawns;
+static int
+spawns_compare_function(const tree_element_t *lhs, const tree_element_t *rhs);
 
 static hash_t
-spawns_hash_field(const tree_element_t *element) {
+spawns_hash_function(const tree_element_t *element);
+
+static struct tree spawns;
+
+static const struct tree_class spawns_tree_class = {
+	.compare_function = spawns_compare_function,
+	.hash_function = spawns_hash_function,
+};
+
+static int
+spawns_compare_function(const tree_element_t *lhs, const tree_element_t *rhs) {
+	return (char *)rhs - (char *)lhs;
+}
+
+static hash_t
+spawns_hash_function(const tree_element_t *element) {
 	const struct daemon *daemon = element;
 
 	return daemon->pid;
@@ -17,7 +33,7 @@ spawns_hash_field(const tree_element_t *element) {
 void
 spawns_init(void) {
 
-	tree_init(&spawns, spawns_hash_field);
+	tree_init(&spawns, &spawns_tree_class);
 }
 
 static void
@@ -99,7 +115,7 @@ spawns_record(struct daemon *daemon) {
 
 struct daemon *
 spawns_retrieve(pid_t pid) {
-	struct tree_node *node = tree_remove(&spawns, pid);
+	struct tree_node *node = tree_remove_by_hash(&spawns, pid);
 	struct daemon *daemon = NULL;
 
 	if(node != NULL) {
