@@ -34,11 +34,11 @@ configuration_reload(void);
  * pointer outside. At this point, only the scheduler
  * is filled with pointer fetched from this function.
  * and it is emptied at each reload.
- * @param namehash Hash of the daemon according to its name
+ * @param name Name of the daemon
  * @return NULL if not found, the daemon else
  */
 struct daemon *
-configuration_daemon_find(hash_t namehash);
+configuration_daemon_find(const char *name);
 
 /* CONFIGURATION_H */
 #endif

@@ -40,6 +40,23 @@ daemons_hash_function(const tree_element_t *element) {
 	return daemon->namehash;
 }
 
+static struct tree_node *
+daemons_remove_by_name(struct tree *daemons, const char *name, hash_t hash) {
+	struct tree_node *removed = tree_remove_by_hash(daemons, hash);
+	struct tree_node *node = removed;
+
+	if(removed != NULL) {
+		struct daemon *daemon = node->element;
+
+		if(strcmp(daemon->name, name) != 0) {
+			node = daemons_remove_by_name(daemons, name, hash);
+			tree_insert(daemons, removed);
+		}
+	}
+
+	return node;
+}
+
 static void
 daemons_preorder_cleanup(struct tree_node *node) {
 
@@ -76,27 +93,10 @@ configuration_daemons_load(const char *name, FILE *filep) {
 	}
 }
 
-static struct tree_node *
-configuration_daemon_remove_by_name(struct tree *daemons, const char *name, hash_t hash) {
-	struct tree_node *removed = tree_remove_by_hash(daemons, hash);
-	struct tree_node *node = removed;
-
-	if(removed != NULL) {
-		struct daemon *daemon = node->element;
-
-		if(strcmp(daemon->name, name) != 0) {
-			node = configuration_daemon_remove_by_name(daemons, name, hash);
-			tree_insert(daemons, removed);
-		}
-	}
-
-	return node;
-}
-
 static void
 configuration_daemons_reload(const char *name, FILE *filep, struct tree *olddaemons) {
 	struct tree_node *node
-		= configuration_daemon_remove_by_name(olddaemons, name, hash_string(name));
+		= daemons_remove_by_name(olddaemons, name, hash_string(name));
 
 	if(node == NULL) {
 		/* New daemon */
@@ -214,8 +214,19 @@ configuration_reload(void) {
 }
 
 struct daemon *
-configuration_daemon_find(hash_t namehash) {
+configuration_daemon_find(const char *name) {
+	struct tree_node *node = daemons_remove_by_name(&daemons, name, hash_string(name));
 
-	return tree_find_by_hash(&daemons, namehash);
+	/* Removing the daemon is a bit far fetched, but we already have a function for this,
+	   avoids creating a whole "find by field" function for the tree, or even a hash table */
+	if(node != NULL) {
+		struct daemon *daemon = node->element;
+
+		tree_insert(&daemons, node);
+
+		return daemon;
+	} else {
+		return NULL;
+	}
 }
 
