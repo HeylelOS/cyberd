@@ -200,7 +200,7 @@ dispatcher_handle_controller(struct fde *controller) {
 
 					if (COMMAND_IS_SYSTEM(control->command)
 						|| (COMMAND_IS_DAEMON(control->command) 
-							&& (activity.daemon = configuration_daemon_find(control->planified.daemonhash)) != NULL)) {
+							&& (activity.daemon = configuration_daemon_find(control->planified.daemon.value)) != NULL)) {
 						scheduler_schedule(&activity);
 					} else {
 						log_error("dispatcher_handle_controller: Unable to find daemon");
