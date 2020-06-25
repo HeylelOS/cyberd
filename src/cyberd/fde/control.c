@@ -5,38 +5,50 @@
 #include "config.h"
 
 #include <stdlib.h>
+#include <stdbool.h>
+#include <limits.h> /* NAME_MAX */
 #include <ctype.h> /* isdigit */
 
-struct control *
-control_create(void) {
-	struct control *control
-		= malloc(sizeof(*control));
-
-	if(control != NULL) {
-		control->state = CONTROL_STATE_COMMAND_DETERMINATION;
-		control->command = COMMAND_READER_START;
-	}
-
-	return control;
+static void
+control_name_init(struct control_name *name) {
+	name->capacity = CONFIG_NAME_BUFFER_DEFAULT_CAPACITY;
+	name->length = 0;
+	name->value = malloc(name->capacity);
 }
 
-void
-control_destroy(struct control *control) {
+static inline void
+control_name_deinit(struct control_name *name) {
+	free(name->value);
+}
 
-	if(control->state == CONTROL_STATE_CCTL_NAME
-		|| (control->state == CONTROL_STATE_END
-			&& control->command == COMMAND_CREATE_CONTROLLER)) {
-		free(control->cctl.name.value);
+static bool
+control_name_append(struct control_name *name, char character) {
+	if(character != '/' && name->length < NAME_MAX) {
+		if(name->length == name->capacity - 1) {
+			name->value = realloc(name->value, (name->capacity *= 2));
+		}
+
+		name->value[name->length] = character;
+		name->length++;
+
+		return true;
+	} else {
+		return false;
 	}
+}
 
-	free(control);
+static inline void
+control_name_finish(struct control_name *name) {
+	name->value[name->length] = '\0';
 }
 
 static inline void
 control_state_end(struct control *control, char c) {
 
 	if(control->command == COMMAND_CREATE_CONTROLLER) {
-		free(control->cctl.name.value);
+		control_name_deinit(&control->cctl.name);
+	} else if(COMMAND_IS_DAEMON(control->command)) {
+		control_name_deinit(&control->planified.daemon);
 	}
 
 	control->state = CONTROL_STATE_COMMAND_DETERMINATION;
@@ -72,7 +84,7 @@ control_state_time(struct control *control, char c) {
 		|| (control->planified.when += c - '0') < 0) {
 		if(c == ' ' && COMMAND_IS_DAEMON(control->command)) {
 			control->state = CONTROL_STATE_DAEMON_NAME;
-			control->planified.daemonhash = hash_start();
+			control_name_init(&control->planified.daemon);
 		} else if(c == '\0' && COMMAND_IS_SYSTEM(control->command)) {
 			control->state = CONTROL_STATE_END;
 		} else {
@@ -94,9 +106,7 @@ control_state_cctl_removing_commands(struct control *control, char c) {
 	} else if(c == '\t') {
 
 		control->state = CONTROL_STATE_CCTL_NAME;
-		control->cctl.name.value = calloc(8, sizeof(char));
-		control->cctl.name.length = 0;
-		control->cctl.name.capacity = 8;
+		control_name_init(&control->cctl.name);
 	} else {
 		enum command_reader removing
 			= command_reader_next(control->cctl.removing, c);
@@ -113,18 +123,10 @@ static inline void
 control_state_cctl_name(struct control *control, char c) {
 
 	if(c == '\0') {
-		control->cctl.name.value[control->cctl.name.length] = '\0';
+		control_name_finish(&control->cctl.name);
 		control->state = CONTROL_STATE_END;
-	} else if((control->cctl.name.length += 1) <= CONFIG_MAX_ACCEPTOR_LEN) {
-
-		if(control->cctl.name.length == control->cctl.name.capacity) {
-			control->cctl.name.value = realloc(control->cctl.name.value,
-				(control->cctl.name.capacity <<= 1) * sizeof(char));
-		}
-
-		control->cctl.name.value[control->cctl.name.length - 1] = c;
-	} else {
-		free(control->cctl.name.value);
+	} else if(!control_name_append(&control->cctl.name, c)) {
+		control_name_deinit(&control->cctl.name);
 		control->state = CONTROL_STATE_DISCARDING;
 	}
 }
@@ -134,12 +136,47 @@ control_state_daemon_name(struct control *control, char c) {
 
 	if(c == '\0') {
 		control->state = CONTROL_STATE_END;
-	} else if(c == '/') {
+	} else if(!control_name_append(&control->planified.daemon, c)) {
+		control_name_deinit(&control->planified.daemon);
 		control->state = CONTROL_STATE_DISCARDING;
-	} else {
-		control->planified.daemonhash
-			= hash_update(control->planified.daemonhash, c);
 	}
+}
+
+struct control *
+control_create(void) {
+	struct control *control
+		= malloc(sizeof(*control));
+
+	if(control != NULL) {
+		control->state = CONTROL_STATE_COMMAND_DETERMINATION;
+		control->command = COMMAND_READER_START;
+	}
+
+	return control;
+}
+
+void
+control_destroy(struct control *control) {
+
+	switch(control->state) {
+	case CONTROL_STATE_END:
+		if(control->command == COMMAND_CREATE_CONTROLLER) {
+			control_name_deinit(&control->cctl.name);
+		} else if(COMMAND_IS_DAEMON(control->command)) {
+			control_name_deinit(&control->planified.daemon);
+		}
+		break;
+	case CONTROL_STATE_CCTL_NAME:
+		control_name_deinit(&control->cctl.name);
+		break;
+	case CONTROL_STATE_DAEMON_NAME:
+		control_name_deinit(&control->planified.daemon);
+		break;
+	default:
+		break;
+	}
+
+	free(control);
 }
 
 bool

@@ -4,10 +4,23 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define tree_class_compare_hashes(lhs, rhs) ((int)((lhs) - (rhs)))
 #define tree_node_height(node)  ((node) == NULL ? 0 : (node)->height)
 #define tree_node_balance(node) ((node) == NULL ? 0 : \
 	(tree_node_height((node)->right) - tree_node_height((node)->left)))
 #define max(a, b) ((a) > (b) ? (a) : (b))
+
+static int
+tree_class_compare(const struct tree_class *class,
+	const tree_element_t *lhs,
+	const tree_element_t *rhs) {
+	hash_t const lhash = class->hash_function(lhs),
+		rhash = class->hash_function(rhs);
+
+	return lhash == rhash ?
+		class->compare_function(lhs, rhs)
+		: tree_class_compare_hashes(lhash, rhash);
+}
 
 static struct tree_node *
 tree_node_rotate_right(struct tree_node *node) {
@@ -58,34 +71,34 @@ tree_node_rotate_right_left(struct tree_node *node) {
 static struct tree_node *
 tree_node_insert(struct tree_node *root,
 	struct tree_node *node,
-	hash_t (*hash_field)(const tree_element_t *)) {
+	const struct tree_class *class) {
 
 	if(root == NULL) {
 
 		return node;
 	} else {
+		int const comparison = tree_class_compare(class, node->element, root->element);
 
-		if(hash_field(node->element)
-			< hash_field(root->element)) {
+		if(comparison < 0) {
 
-			root->left = tree_node_insert(root->left, node, hash_field);
+			root->left = tree_node_insert(root->left, node, class);
 
 			if(tree_node_balance(root) == -2) {
 
-				if(hash_field(node->element) < hash_field(root->left->element)) {
+				if(tree_class_compare(class, node->element, root->left->element) < 0) {
 					root = tree_node_rotate_right(root);
 				} else {
 					root = tree_node_rotate_left_right(root);
 				}
 			}
 
-		} else if(hash_field(node->element) > hash_field(root->element)) {
+		} else if(comparison > 0) {
 
-			root->right = tree_node_insert(root->right, node, hash_field);
+			root->right = tree_node_insert(root->right, node, class);
 
 			if(tree_node_balance(root) == 2) {
 
-				if(hash_field(node->element) > hash_field(root->right->element)) {
+				if(tree_class_compare(class, node->element, root->right->element) > 0) {
 					root = tree_node_rotate_left(root);
 				} else {
 					root = tree_node_rotate_right_left(root);
@@ -94,7 +107,7 @@ tree_node_insert(struct tree_node *root,
 		} else {
 			/* This should not happen, will certainly generate memory leaks
 			in most use case in the process */
-			log_error("Trying to reinsert element %lu", hash_field(node->element));
+			log_error("Trying to reinsert element %lu", class->hash_function(node->element));
 		}
 
 		root->height = max(tree_node_height(root->left), tree_node_height(root->right)) + 1;
@@ -109,16 +122,18 @@ tree_node_insert(struct tree_node *root,
  * left unchanged if the node dosn't exist
  */
 static struct tree_node *
-tree_node_remove(struct tree_node *root,
+tree_node_remove_by_hash(struct tree_node *root,
 	hash_t hash,
-	struct tree_node **removed,
-	hash_t (*hash_field)(const tree_element_t *)) {
+	const struct tree_class *class,
+	struct tree_node **removed) {
 
 	if(root != NULL) {
-		if(hash < hash_field(root->element)) {
-			root->left = tree_node_remove(root->left, hash, removed, hash_field);
-		} else if(hash > hash_field(root->element)) {
-			root->right = tree_node_remove(root->right, hash, removed, hash_field);
+		int const comparison = tree_class_compare_hashes(hash, class->hash_function(root->element));
+
+		if(comparison < 0) {
+			root->left = tree_node_remove_by_hash(root->left, hash, class, removed);
+		} else if(comparison > 0) {
+			root->right = tree_node_remove_by_hash(root->right, hash, class, removed);
 		} else {
 			*removed = root;
 
@@ -130,8 +145,8 @@ tree_node_remove(struct tree_node *root,
 					successor = successor->left;
 				}
 
-				root->right = tree_node_remove(root->right,
-					hash_field(successor->element), &successor, hash_field);
+				root->right = tree_node_remove_by_hash(root->right,
+					class->hash_function(successor->element), class, &successor);
 
 				successor->left = root->left;
 				successor->right = root->right;
@@ -198,10 +213,10 @@ tree_node_destroy(struct tree_node *node) {
 
 void
 tree_init(struct tree *tree,
-	hash_t (*hash_field)(const tree_element_t *)) {
+	const struct tree_class *class) {
 
+	tree->class = class;
 	tree->root = NULL;
-	tree->hash_field = hash_field;
 }
 
 void
@@ -214,32 +229,32 @@ void
 tree_insert(struct tree *tree,
 	struct tree_node *node) {
 
-	tree->root = tree_node_insert(tree->root, node,
-		tree->hash_field);
+	tree->root = tree_node_insert(tree->root, node, tree->class);
 }
 
 struct tree_node *
-tree_remove(struct tree *tree,
+tree_remove_by_hash(struct tree *tree,
 	hash_t hash) {
 	struct tree_node *removed = NULL;
 
-	tree->root = tree_node_remove(tree->root, hash,
-		&removed, tree->hash_field);
+	tree->root = tree_node_remove_by_hash(tree->root, hash,
+		tree->class, &removed);
 
 	return removed;
 }
 
 tree_element_t *
-tree_find(struct tree *tree,
+tree_find_by_hash(struct tree *tree,
 	hash_t hash) {
 	struct tree_node *current = tree->root;
+	hash_t currenthash;
 
 	while(current != NULL
-		&& tree->hash_field(current->element) != hash) {
+		&& (currenthash = tree->class->hash_function(current->element), currenthash != hash)) {
 
-		if(hash < tree->hash_field(current->element)) {
+		if(hash < currenthash) {
 			current = current->left;
-		} else { /* tree->hash_field(current->element) < hash */
+		} else { /* currenthash < hash */
 			current = current->right;
 		}
 	}
