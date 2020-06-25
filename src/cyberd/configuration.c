@@ -12,11 +12,29 @@
 #include <fcntl.h>
 #include <errno.h>
 
+static int
+daemons_compare_function(const tree_element_t *lhs, const tree_element_t *rhs);
+
+static hash_t
+daemons_hash_function(const tree_element_t *element);
+
 /* Main storage for daemons */
 static struct tree daemons;
 
+static const struct tree_class daemons_tree_class = {
+	.compare_function = daemons_compare_function,
+	.hash_function = daemons_hash_function,
+};
+
+static int
+daemons_compare_function(const tree_element_t *lhs, const tree_element_t *rhs) {
+	const struct daemon *ldaemon = lhs, *rdaemon = rhs;
+
+	return strcmp(ldaemon->name, rdaemon->name);
+}
+
 static hash_t
-daemons_hash_field(const tree_element_t *element) {
+daemons_hash_function(const tree_element_t *element) {
 	const struct daemon *daemon = element;
 
 	return daemon->namehash;
@@ -58,10 +76,27 @@ configuration_daemons_load(const char *name, FILE *filep) {
 	}
 }
 
+static struct tree_node *
+configuration_daemon_remove_by_name(struct tree *daemons, const char *name, hash_t hash) {
+	struct tree_node *removed = tree_remove_by_hash(daemons, hash);
+	struct tree_node *node = removed;
+
+	if (removed != NULL) {
+		struct daemon *daemon = node->element;
+
+		if (strcmp(daemon->name, name) != 0) {
+			node = configuration_daemon_remove_by_name(daemons, name, hash);
+			tree_insert(daemons, removed);
+		}
+	}
+
+	return node;
+}
+
 static void
 configuration_daemons_reload(const char *name, FILE *filep, struct tree *olddaemons) {
 	struct tree_node *node
-		= tree_remove(olddaemons, hash_string(name));
+		= configuration_daemon_remove_by_name(olddaemons, name, hash_string(name));
 
 	if (node == NULL) {
 		/* New daemon */
@@ -113,7 +148,7 @@ configuration_init(void) {
 	DIR *dirp;
 
 	log_print("configuration_init");
-	tree_init(&daemons, daemons_hash_field);
+	tree_init(&daemons, &daemons_tree_class);
 
 	if ((dirp = opendir(CONFIG_DAEMONCONFS_DIRECTORY)) != NULL) {
 		struct dirent *entry;
@@ -152,7 +187,7 @@ configuration_reload(void) {
 
 	log_print("configuration_reload");
 	scheduler_empty();
-	tree_init(&daemons, daemons_hash_field);
+	tree_init(&daemons, &daemons_tree_class);
 
 	if ((dirp = opendir(CONFIG_DAEMONCONFS_DIRECTORY)) != NULL) {
 		struct dirent *entry;
@@ -181,6 +216,6 @@ configuration_reload(void) {
 struct daemon *
 configuration_daemon_find(hash_t namehash) {
 
-	return tree_find(&daemons, namehash);
+	return tree_find_by_hash(&daemons, namehash);
 }
 

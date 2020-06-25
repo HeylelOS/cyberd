@@ -13,6 +13,12 @@
 /** Alias to what it holds, just to avoid void * for code clarity */
 typedef void tree_element_t;
 
+/** Tree class, supporting dynamic methods */
+struct tree_class {
+	int    (*compare_function)(const tree_element_t *, const tree_element_t *);
+	hash_t (*hash_function)(const tree_element_t *);
+};
+
 /** Node in the tree */
 struct tree_node {
 	tree_element_t *element;
@@ -23,8 +29,8 @@ struct tree_node {
 
 /** The tree, with hash field accessor */
 struct tree {
+	const struct tree_class *class;
 	struct tree_node *root;
-	hash_t (*hash_field)(const tree_element_t *);
 };
 
 /**
@@ -45,11 +51,11 @@ tree_node_destroy(struct tree_node *node);
 /**
  * Initialize tree structure
  * @param tree Pointer to the structure to initialize
- * @param hash_field "Getter" for the hash used to index each element
+ * @param class Class associated to this tree
  */
 void
 tree_init(struct tree *tree,
-	hash_t (*hash_field)(const tree_element_t *));
+	const struct tree_class *class);
 
 /**
  * Frees informations of a tree
@@ -74,7 +80,7 @@ tree_insert(struct tree *tree,
  * @return NULL if not found, or the node else, removed from tree
  */
 struct tree_node *
-tree_remove(struct tree *tree,
+tree_remove_by_hash(struct tree *tree,
 	hash_t hash);
 
 /**
@@ -84,7 +90,7 @@ tree_remove(struct tree *tree,
  * @return NULL if not found, or the element else
  */
 tree_element_t *
-tree_find(struct tree *tree,
+tree_find_by_hash(struct tree *tree,
 	hash_t hash);
 
 /* TREE_H */

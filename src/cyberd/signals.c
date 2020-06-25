@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <sys/wait.h>
+#include <errno.h>
 
 static sigset_t initsigset;
 
@@ -27,7 +28,7 @@ static void
 sigchld_handler(int sig) {
 	siginfo_t info;
 
-	if (waitid(P_ALL, 0, &info, WEXITED | WNOHANG) == 0) {
+	while (info.si_pid = 0, errno = 0, waitid(P_ALL, 0, &info, WEXITED | WNOHANG) == 0 && info.si_pid != 0) {
 		struct daemon *daemon = spawns_retrieve(info.si_pid);
 
 		switch (info.si_code) {
@@ -80,7 +81,9 @@ sigchld_handler(int sig) {
 			}
 			break;
 		}
-	} else {
+	}
+
+	if (errno != 0) {
 		log_error("sigchld waitid: %m");
 	}
 }
