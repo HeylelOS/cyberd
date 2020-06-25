@@ -3,10 +3,18 @@
 
 #include "perms.h"
 #include "command_reader.h"
-#include "../hash.h"
 
 #include <stdbool.h>
 #include <sys/types.h>
+
+/**
+ * Structure representing a dynamic string for use in the automaton
+ */
+struct control_name {
+	unsigned int capacity; /**< Capacity, in bytes, of the buffer */
+	unsigned int length;   /**< Current length of the string, always less than capacity */
+	char *value;           /**< string buffer, not NUL terminated until last input */
+};
 
 /**
  * This structure is used by File Descriptor Element of type controller
@@ -30,17 +38,13 @@ struct control {
 			perms_t permsmask; /**< Mask of which command to remove if we create a controller */
 			union {
 				enum command_reader removing; /**< Valid in CONTROL_STATE_CCTL_REMOVING_COMMANDS */
-				struct {
-					char *value;
-					size_t capacity;
-					size_t length;
-				} name; /**< Valid in CONTROL_STATE_CCTL_NAME, take care of potential memory leaks */
+				struct control_name name; /**< Valid in CONTROL_STATE_CCTL_NAME, take care of potential memory leaks */
 			};
 		} cctl; /**< Valid in CONTROL_STATE_CCTL_REMOVING_COMMANDS and CONTROL_STATE_CCTL_NAME */
 		struct {
 			time_t when;
-			hash_t daemonhash;
-		} planified; /**< Valid in CONTROL_STATE_TIME and CONTROL_STATE_DAEMON_NAME */
+			struct control_name daemon;
+		} planified; /**< Valid in CONTROL_STATE_TIME and CONTROL_STATE_DAEMON_NAME, take care of potential memory leaks */
 	};
 };
 
