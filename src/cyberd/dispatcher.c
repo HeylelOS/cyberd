@@ -14,6 +14,12 @@
 #include <fcntl.h>
 #include <errno.h>
 
+static int
+dispatcher_compare_function(const tree_element_t *lhs, const tree_element_t *rhs);
+
+static hash_t
+dispatcher_hash_function(const tree_element_t *element);
+
 static struct {
 	struct {
 		fd_set activeset;
@@ -23,8 +29,18 @@ static struct {
 	struct tree fds;
 } dispatcher;
 
+static const struct tree_class dispatcher_tree_class = {
+	.compare_function = dispatcher_compare_function,
+	.hash_function = dispatcher_hash_function,
+};
+
+static int
+dispatcher_compare_function(const tree_element_t *lhs, const tree_element_t *rhs) {
+	return (char *)rhs - (char *)lhs;
+}
+
 static hash_t
-dispatcher_hash_fd(const tree_element_t *element) {
+dispatcher_hash_function(const tree_element_t *element) {
 	const struct fde *fde = element;
 
 	return fde->fd;
@@ -48,7 +64,7 @@ dispatcher_insert(struct fde *fde) {
 static void
 dispatcher_remove(struct fde *fde) {
 	struct tree_node *node
-		= tree_remove(&dispatcher.fds, fde->fd);
+		= tree_remove_by_hash(&dispatcher.fds, fde->fd);
 
 	FD_CLR(fde->fd, &dispatcher.sets->activeset);
 	tree_node_destroy(node);
@@ -57,7 +73,7 @@ dispatcher_remove(struct fde *fde) {
 static inline struct fde *
 dispatcher_find(int fd) {
 
-	return tree_find(&dispatcher.fds, fd);
+	return tree_find_by_hash(&dispatcher.fds, fd);
 }
 
 void
@@ -69,12 +85,12 @@ dispatcher_init(void) {
 		abort();
 	}
 
-	tree_init(&dispatcher.fds, dispatcher_hash_fd);
+	tree_init(&dispatcher.fds, &dispatcher_tree_class);
 
 	if (mkdir(CONFIG_CONTROLLERS_DIRECTORY, S_IRWXU | S_IRWXG | S_IRWXO) == 0
 		|| errno == EEXIST) { /* If it already exists, we postpone the error if its not a directory */
 		struct fde *acceptor
-			= fde_create_acceptor("initctl",
+			= fde_create_acceptor(CONFIG_CONTROLLERS_FIRST,
 				PERMS_CREATE_CONTROLLER | 
 				PERMS_DAEMON_ALL |
 				PERMS_SYSTEM_ALL);
@@ -84,7 +100,7 @@ dispatcher_init(void) {
 				fde_destroy(acceptor);
 			}
 		} else {
-			log_error("dispatcher_init: Unable to create main 'initctl' acceptor");
+			log_error("dispatcher_init: Unable to create main '"CONFIG_CONTROLLERS_FIRST"' acceptor");
 		}
 	} else {
 		log_error("dispatcher_init: Unable to create controllers directory '"CONFIG_CONTROLLERS_DIRECTORY"': %m");
