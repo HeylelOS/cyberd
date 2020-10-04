@@ -9,7 +9,7 @@
 
 #define COMMAND_UNDEFINED         0
 /** Create a new IPC socket with less or equal rights */
-#define COMMAND_CREATE_CONTROLLER 1
+#define COMMAND_CREATE_ENDPOINT   1
 
 /** Starts a daemon if not started, stopping */
 #define COMMAND_DAEMON_START      8
@@ -34,7 +34,7 @@
 /** Checks if a command id is related to system */
 #define COMMAND_IS_SYSTEM(c) ((c) >= COMMAND_SYSTEM_POWEROFF && (c) <= COMMAND_SYSTEM_SUSPEND)
 /** Checks if a command id is valid */
-#define COMMAND_IS_VALID(c) ((c) == COMMAND_CREATE_CONTROLLER\
+#define COMMAND_IS_VALID(c) ((c) == COMMAND_CREATE_ENDPOINT\
 							|| COMMAND_IS_DAEMON(c)\
 							|| COMMAND_IS_SYSTEM(c))
 

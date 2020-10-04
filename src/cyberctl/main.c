@@ -2,40 +2,58 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
-#include <ctype.h>
 #include <unistd.h>
 #include <time.h>
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <errno.h>
 #include <err.h>
 
+#include <sys/socket.h>
+#include <sys/un.h>
+
 #include "config.h"
+#include "commands.h"
+#include "perms.h"
 
 struct cyberctl_args {
-	const char *socket;
-	const char *newctl;
-	time_t when;
+	const char *endpoint;
+	int64_t when;
 };
 
-static void
-cyberctl_usage(const char *cyberctlname) {
+struct command_identifier {
+	int id;
+	char *name;
+} const commands[] = {
+	{ .id = COMMAND_CREATE_ENDPOINT, .name = "create-endpoint" },
+	{ .id = COMMAND_DAEMON_START, .name = "start" },
+	{ .id = COMMAND_DAEMON_STOP, .name = "stop" },
+	{ .id = COMMAND_DAEMON_RELOAD, .name = "reload" },
+	{ .id = COMMAND_DAEMON_END, .name = "end" },
+	{ .id = COMMAND_SYSTEM_POWEROFF, .name = "poweroff" },
+	{ .id = COMMAND_SYSTEM_HALT, .name = "halt" },
+	{ .id = COMMAND_SYSTEM_REBOOT, .name = "reboot" },
+	{ .id = COMMAND_SYSTEM_SUSPEND, .name = "suspend" },
+};
 
-	fprintf(stderr, "usage: %s [-s socket] [-n] [-t when] <start|stop|reload|end> daemon...\n"
-		"       %s [-s socket] [-n] [-t when] <poweroff|halt|reboot|suspend>\n"
-		"       %s [-s socket] -c <name> [start|stop|reload|end|poweroff|halt|reboot|suspend|cctl]...\n",
-		cyberctlname, cyberctlname, cyberctlname);
-	exit(EXIT_FAILURE);
+static int
+cyberctl_command_find_id(const char *name) {
+	const struct command_identifier *current = commands,
+		* const end = commands + sizeof(commands) / sizeof(*commands);
+
+	while(current != end && strcmp(current->name, name) != 0) {
+		current++;
+	}
+
+	return current != end ? current->id : COMMAND_UNDEFINED;
 }
 
 static int
-cyberctl_open(const char *name) {
+cyberctl_endpoint_open(const char *name) {
 	int fd = socket(AF_LOCAL, SOCK_STREAM, 0);
 
 	if(fd != -1) {
 		struct sockaddr_un addr = { .sun_family = AF_LOCAL };
+
 		if(snprintf(addr.sun_path, sizeof(addr.sun_path),
-			CONFIG_CONTROLLERS_DIRECTORY"/%s", name) >= sizeof(addr.sun_path)) {
+			CONFIG_ENDPOINTS_DIRECTORY"/%s", name) >= sizeof(addr.sun_path)) {
 			errx(EXIT_FAILURE, "Socket pathname too long");
 		}
 
@@ -50,154 +68,128 @@ cyberctl_open(const char *name) {
 }
 
 static void
-cyberctl_close(int fd) {
-
+cyberctl_endpoint_close(int fd) {
 	shutdown(fd, SHUT_RDWR);
 	close(fd);
 }
 
-static char *
-cyberctl_command_daemon(const char *cyberctlcommand) {
-
-	if(strcmp("start", cyberctlcommand) == 0) {
-		return "dstt";
-	} else if(strcmp("stop", cyberctlcommand) == 0) {
-		return "dstp";
-	} else if(strcmp("reload", cyberctlcommand) == 0) {
-		return "drld";
-	} else if(strcmp("end", cyberctlcommand) == 0) {
-		return "dend";
-	} else {
-		return NULL;
+static int
+cyberctl_create_endpoint(int fd, uint8_t id, char **argpos, char **argend) {
+	if(argpos == argend) {
+		warnx("Missing argument for create-endpoint command");
+		return EXIT_FAILURE;
 	}
+
+	const char *newendpoint = *argpos;
+	size_t newendpointlen = strlen(newendpoint);
+	uint8_t buffer[sizeof(uint8_t) + sizeof(uint64_t) + newendpointlen + 1];
+	perms_t *permsp = (perms_t *)(buffer + 1);
+	char *name = (char *)(permsp + 1);
+
+	buffer[0] = id;
+
+	while(++argpos != argend) {
+		*permsp |= cyberctl_command_find_id(*argpos);
+	}
+
+	*permsp = htonll(*permsp);
+
+	memcpy(name, newendpoint, newendpointlen + 1);
+
+	if(write(fd, buffer, sizeof(buffer)) != sizeof(buffer)) {
+		warn("cyberctl_create_endpoint: write");
+		return EXIT_FAILURE;
+	}
+
+	return EXIT_SUCCESS;
 }
 
-static char *
-cyberctl_command_system(const char *cyberctlcommand) {
-
-	if(strcmp("poweroff", cyberctlcommand) == 0) {
-		return "spwf";
-	} else if(strcmp("halt", cyberctlcommand) == 0) {
-		return "shlt";
-	} else if(strcmp("reboot", cyberctlcommand) == 0) {
-		return "srbt";
-	} else if(strcmp("suspend", cyberctlcommand) == 0) {
-		return "sssp";
-	} else {
-		return NULL;
+static int
+cyberctl_daemon(int fd, uint8_t id, char **argpos, char **argend, const struct cyberctl_args *args) {
+	if(argpos == argend) {
+		warnx("Missing arguments for daemon command");
+		return EXIT_FAILURE;
 	}
+
+	while(argpos != argend) {
+		char *daemon = *argpos;
+		size_t daemonlen = strlen(daemon);
+		uint8_t buffer[sizeof(uint8_t) + sizeof(uint64_t) + daemonlen + 1];
+		uint64_t *whenp = (uint64_t *)(buffer + 1);
+		char *name = (char *)(whenp + 1);
+
+		buffer[0] = id;
+		*whenp = htonll((uint64_t)args->when);
+		memcpy(name, daemon, daemonlen + 1);
+
+		if(write(fd, buffer, sizeof(buffer)) != sizeof(buffer)) {
+			warn("cyberctl_daemon: write");
+			return EXIT_FAILURE;
+		}
+
+		argpos++;
+	}
+
+	return EXIT_SUCCESS;
+}
+
+static int
+cyberctl_system(int fd, uint8_t id, char **argpos, char **argend, const struct cyberctl_args *args) {
+	if(argpos != argend) {
+		warnx("Invalid arguments for system command");
+		return EXIT_FAILURE;
+	}
+
+	uint8_t buffer[sizeof(uint8_t) + sizeof(uint64_t)];
+	uint64_t *whenp = (uint64_t *)(buffer + 1);
+
+	buffer[0] = id;
+	*whenp = htonll((uint64_t)args->when);
+
+	if(write(fd, buffer, sizeof(buffer)) != sizeof(buffer)) {
+		warn("cyberctl_system: write");
+		return EXIT_FAILURE;
+	}
+
+	return EXIT_SUCCESS;
 }
 
 static void
-cyberctl_daemon(int fd,
-	const char *command,
-	time_t when,
-	const char *daemonname) {
-	size_t buffersize = 27 + strlen(daemonname);
-	char buffer[buffersize];
-	size_t bufferlen;
-
-	if((bufferlen = snprintf(buffer, buffersize, "%.4s %.20ld %s", command, when, daemonname)) < buffersize) {
-		bufferlen++;
-
-		if(write(fd, buffer, bufferlen) != bufferlen) {
-			warn("Unable to write");
-		}
-	}
-}
-
-static void
-cyberctl_system(int fd,
-	const char *command,
-	time_t when) {
-	size_t buffersize = 26;
-	char buffer[buffersize];
-	size_t bufferlen;
-
-	if((bufferlen = snprintf(buffer, buffersize, "%.4s %.20ld", command, when)) < buffersize) {
-		bufferlen++;
-
-		if(write(fd, buffer, bufferlen) != bufferlen) {
-			warn("Unable to write");
-		}
-	}
-}
-
-static void
-cyberctl_cctl(int fd,
-	char **restricted,
-	char **end,
-	const char *name) {
-	size_t buffersize = 6 + (end - restricted) * 5 + strlen(name);
-	char buffer[buffersize];
-	char *current = stpncpy(buffer, "cctl ", 5);
-	size_t bufferlen;
-
-	while(restricted != end) {
-		char *command = cyberctl_command_daemon(*restricted);
-
-		if(command == NULL) {
-			command = cyberctl_command_system(*restricted);
-		}
-
-		if(command != NULL || strcmp("cctl", *restricted) == 0) {
-			current = stpncpy(current, command, 4);
-			*current++ = ' ';
-		} else {
-			warnx("Unknown restriction '%s'", *restricted);
-		}
-
-		restricted++;
-	}
-
-	current[-1] = '\t';
-	current = stpncpy(current, name, buffer + buffersize - current);
-	bufferlen = current - buffer;
-	if(write(fd, buffer, bufferlen) != bufferlen) {
-		warn("Unable to write");
-	}
+cyberctl_usage(const char *cyberctlname) {
+	fprintf(stderr, "usage: %s [-s endpoint] [-E] [-t when] <start|stop|reload|end> daemon...\n"
+		"       %s [-s endpoint] [-E] [-t when] <poweroff|halt|reboot|suspend>\n"
+		"       %s [-s endpoint] <create-endpoint> [start|stop|reload|end|poweroff|halt|reboot|suspend|create-endpoint]...\n",
+		cyberctlname, cyberctlname, cyberctlname);
+	exit(EXIT_FAILURE);
 }
 
 static struct cyberctl_args
 cyberctl_parse_args(int argc, char **argv) {
 	struct cyberctl_args args = {
-		.socket = "initctl",
-		.newctl = getenv("CYBERCTL_SOCKET"),
-		.when = 0
+		.endpoint = CONFIG_ENDPOINT_ROOT,
+		.when = 0,
 	};
-	bool sinceepoch = true;
+	bool epoch = false;
 	int c;
 
-	while((c = getopt(argc, argv, ":s:t:c:n")) != -1) {
+	while((c = getopt(argc, argv, ":s:t:E")) != -1) {
 		switch(c) {
 		case 's':
-			args.socket = optarg;
+			args.endpoint = optarg;
 			break;
 		case 't': {
 			char *end;
-			unsigned long value = strtoul(optarg, &end, 10);
+			long value = strtol(optarg, &end, 10);
 
 			if(*end == '\0' && *optarg != '\0') {
 				args.when = (time_t) value;
-				if(args.when < 0) {
-					args.when = 0;
-				}
 			} else {
-				warnx("Expected integral value for -%c, found '%s' (stopped at '%c')",
-					optopt, optarg, *end);
+				warnx("Expected integral value for -%c, found '%s' (stopped at '%c')", optopt, optarg, *end);
 				cyberctl_usage(*argv);
 			}
 		} break;
-		case 'c':
-			if(*optarg != '\0' && *optarg != '.'
-				&& strchr(optarg, '/') == NULL) {
-				args.newctl = optarg;
-			} else {
-				errx(EXIT_FAILURE, "Invalid socket name '%s'", optarg);
-			}
-			break;
-		case 'n':
-			sinceepoch = false;
+		case 'E':
+			epoch = true;
 			break;
 		case '?':
 			warnx("Invalid option -%c", optopt);
@@ -208,54 +200,38 @@ cyberctl_parse_args(int argc, char **argv) {
 		}
 	}
 
-	if(!sinceepoch) {
+	if(!epoch) {
 		args.when += time(NULL);
+	}
+
+	if(optind == argc) {
+		warnx("Missing command name");
+		cyberctl_usage(*argv);
 	}
 
 	return args;
 }
 
 int
-main(int argc,
-	char **argv) {
+main(int argc, char **argv) {
 	const struct cyberctl_args args = cyberctl_parse_args(argc, argv);
 	char **argpos = argv + optind, ** const argend = argv + argc;
-	int fd = cyberctl_open(args.socket);
-	const char *command;
+	int fd = cyberctl_endpoint_open(args.endpoint);
+	int id = cyberctl_command_find_id(*argpos);
+	int retval = EXIT_FAILURE;
 
-	if(args.newctl != NULL) {
-		cyberctl_cctl(fd, argpos, argend, args.newctl);
-	} else if(argc - optind > 0) {
-		if((command = cyberctl_command_daemon(*argpos)) != NULL) {
-			argpos++;
-
-			if(argpos != argend) {
-				do {
-					cyberctl_daemon(fd, command, args.when, *argpos);
-					argpos++;
-				} while(argpos != argend);
-			} else {
-				warnx("No daemon(s) specified for command '%s'", argpos[-1]);
-				cyberctl_usage(*argv);
-			}
-		} else if((command = cyberctl_command_system(*argpos)) != NULL) {
-			if(argend - argpos == 1) {
-				cyberctl_system(fd, command, args.when);
-			} else {
-				warnx("Unexpected '%s' after '%s'", argpos[1], *argpos);
-				cyberctl_usage(*argv);
-			}
-		} else {
-			warnx("Unknown command '%s'", *argpos);
-			cyberctl_usage(*argv);
-		}
+	if(id == COMMAND_CREATE_ENDPOINT) {
+		retval = cyberctl_create_endpoint(fd, id, argpos + 1, argend);
+	} else if(COMMAND_IS_DAEMON(id)) {
+		retval = cyberctl_daemon(fd, id, argpos + 1, argend, &args);
+	} else if(COMMAND_IS_SYSTEM(id)) {
+		retval = cyberctl_system(fd, id, argpos + 1, argend, &args);
 	} else {
-		warnx("Missing argument");
-		cyberctl_usage(*argv);
+		warnx("Invalid command name: %s", *argpos);
 	}
 
-	cyberctl_close(fd);
+	cyberctl_endpoint_close(fd);
 
-	return EXIT_SUCCESS;
+	return retval;
 }
 

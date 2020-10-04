@@ -1,43 +1,36 @@
-# Inter-process control of cyberd
+# Inter-process communication with cyberd
 
 This document describes the format used to communicate with a cyberd instance.
-Through the use of dedicated control sockets, the program requests actions to cyberd.
-Each socket has an associated set of capabilities. Those determine which commands
-cyberd will accept from the socket.
+Through the use of dedicated sockets (called endpoints), the program requests actions to cyberd.
+Each endpoint has an associated set of capabilities. Those determine which commands cyberd will accept from the endpoint.
 
 ## Generic command format
 
-Commands are ASCII-coded.
+Commands are binary coded, using network byte order (MSB, Big-Endian).
 
-Each command is a line, ended by the ASCII NUL character.
-A majority of commands obey the following format:
+Commands are succession of components, there exists three kinds of commands: Daemons related, system related and miscellaneous.
 
-- \<command\> \<when\> \<arguments...\>
-
-Where:
-- \<command\>: One of the lowercased identifier specified in the next sections.
-- \<when\>: One digit-composed or empty word, interpreted as a unix timestamp, corresponds to universal UTC time. An overflow is considered an invalid timestamp.
-- \<arguments...\>: Command defined value/values. Separation is done by only one whitespace, except if specified otherwise.
-
-- \<daemon name\> and \<acceptor name\> refer to filenames not beginning with a '.', so not composed by any NUL nor '/'. Note this is the only field not mandatorily ASCII-coded. The filename max size also applies.
+Components are of the following:
+- \<command\>: One byte unsigned integer, representing the kind of command. In the following section, the value will be represented using an hexadecimal notation.
+- \<when\>: Eight bytes integer, interpreted as a unix timestamp, corresponds to universal UTC time.
+- \<removed capabilities\>: Eight bytes integer, bitmask of removed capabilities, each \<command\> value is represented by the \<command\>th bit.
+- \<name\> refers to a filename not beginning with a '.', nor composed by any '/', ended by a zero byte (also called referred to as NUL character). The filename max size also applies, to avoid attacks by buffer overflow.
 
 ## Daemons related commands
 
-- dstt \<when\> \<daemon name\> : Schedule start of a daemon
-- dstp \<when\> \<daemon name\> : Schedule stop of a daemon
-- drld \<when\> \<daemon name\> : Schedule reload of a daemon
-- dend \<when\> \<daemon name\> : Schedule end of a daemon
+- 0x08 \<when\> \<name\> : Schedule start of a daemon
+- 0x09 \<when\> \<name\> : Schedule stop of a daemon
+- 0x0A \<when\> \<name\> : Schedule reload of a daemon
+- 0x0B \<when\> \<name\> : Schedule end of a daemon
 
 ## System related commands
 
-- spwf \<when\> : Power off system
-- shlt \<when\> : Halt system
-- srbt \<when\> : Reboot system
-- sssp \<when\> : Suspend system
+- 0x10 \<when\> : Power off system
+- 0x11 \<when\> : Halt system
+- 0x12 \<when\> : Reboot system
+- 0x13 \<when\> : Suspend system
 
 ## Miscellaneous commands
 
-- cctl\<removed capabilities\>\<tabulation\>\<acceptor name\> : Create a new control socket
-  - \<removed capabilities\> : Zero or more of the previously defined command names specifying commands the new socket cannot execute. Each prefixed by one ASCII space for separation.
-  - \<tabulation\> : One ASCII TAB character to separate \<removed capabilities\> from \<acceptor name\>
+- 0x01 \<removed capabilities\> \<name\> : Create a new control socket
 
