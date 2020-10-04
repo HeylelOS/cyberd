@@ -76,7 +76,7 @@ end(void) {
 
 	/* Notify spawns they should stop */
 	spawns_stop();
-	/* Destroying dispatcher, to unlink acceptors */
+	/* Destroying dispatcher, to unlink endpoints */
 	dispatcher_deinit();
 	/* Modifying the signal mask so we accept SIGCHLD now */
 	signals_stopping();

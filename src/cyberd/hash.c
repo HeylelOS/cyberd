@@ -17,7 +17,7 @@ hash_string(const char *string) {
 		hash *= FNV_PRIME;
 		hash ^= *ptr;
 
-		ptr += 1;
+		ptr++;
 	}
 
 	return hash;
@@ -25,13 +25,11 @@ hash_string(const char *string) {
 
 hash_t
 hash_start(void) {
-
 	return FNV_OFFSET_BASIS;
 }
 
 hash_t
 hash_update(hash_t hash, char c) {
-
 	hash *= FNV_PRIME;
 	hash ^= c;
 
