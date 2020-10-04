@@ -1,17 +1,14 @@
 #include "dispatcher.h"
-#include "log.h"
+#include "dispatcher_node.h"
 #include "tree.h"
-#include "fde.h"
+#include "log.h"
 
 #include "configuration.h"
-#include "scheduler.h"
 #include "config.h"
 
-#include <stdlib.h>
 #include <unistd.h>
 #include <string.h> /* memcpy */
 #include <sys/stat.h>
-#include <fcntl.h>
 #include <errno.h>
 
 static int
@@ -21,12 +18,10 @@ static hash_t
 dispatcher_hash_function(const tree_element_t *element);
 
 static struct {
-	struct {
-		fd_set activeset;
-		fd_set readset;
-	} *sets;
+	struct tree nodes;
 
-	struct tree fds;
+	fd_set activeset;
+	fd_set readset;
 } dispatcher;
 
 static const struct tree_class dispatcher_tree_class = {
@@ -41,19 +36,18 @@ dispatcher_compare_function(const tree_element_t *lhs, const tree_element_t *rhs
 
 static hash_t
 dispatcher_hash_function(const tree_element_t *element) {
-	const struct fde *fde = element;
+	const struct dispatcher_node *dispatched = element;
 
-	return fde->fd;
+	return dispatched->fd;
 }
 
 static bool
-dispatcher_insert(struct fde *fde) {
-	struct tree_node *node
-		= tree_node_create(fde);
+dispatcher_insert(struct dispatcher_node *dispatched) {
+	struct tree_node *node = tree_node_create(dispatched);
 
 	if(node != NULL) {
-		FD_SET(fde->fd, &dispatcher.sets->activeset);
-		tree_insert(&dispatcher.fds, node);
+		FD_SET(dispatched->fd, &dispatcher.activeset);
+		tree_insert(&dispatcher.nodes, node);
 
 		return true;
 	} else {
@@ -62,58 +56,44 @@ dispatcher_insert(struct fde *fde) {
 }
 
 static void
-dispatcher_remove(struct fde *fde) {
-	struct tree_node *node
-		= tree_remove_by_hash(&dispatcher.fds, fde->fd);
+dispatcher_remove(struct dispatcher_node *dispatched) {
+	struct tree_node *node = tree_remove_by_hash(&dispatcher.nodes, dispatched->fd);
 
-	FD_CLR(fde->fd, &dispatcher.sets->activeset);
+	FD_CLR(dispatched->fd, &dispatcher.activeset);
 	tree_node_destroy(node);
 }
 
-static inline struct fde *
+static inline struct dispatcher_node *
 dispatcher_find(int fd) {
-
-	return tree_find_by_hash(&dispatcher.fds, fd);
+	return tree_find_by_hash(&dispatcher.nodes, fd);
 }
 
 void
 dispatcher_init(void) {
+	tree_init(&dispatcher.nodes, &dispatcher_tree_class);
 
-	dispatcher.sets = calloc(1, sizeof(*dispatcher.sets));
-	/* If we cannot create dispatcher sets, we're basically foobar */
-	if(dispatcher.sets == NULL) {
-		abort();
-	}
-
-	tree_init(&dispatcher.fds, &dispatcher_tree_class);
-
-	if(mkdir(CONFIG_CONTROLLERS_DIRECTORY, S_IRWXU | S_IRWXG | S_IRWXO) == 0
+	if(mkdir(CONFIG_ENDPOINTS_DIRECTORY, S_IRWXU | S_IRWXG | S_IRWXO) == 0
 		|| errno == EEXIST) { /* If it already exists, we postpone the error if its not a directory */
-		struct fde *acceptor
-			= fde_create_acceptor(CONFIG_CONTROLLERS_FIRST,
-				PERMS_CREATE_CONTROLLER | 
-				PERMS_DAEMON_ALL |
-				PERMS_SYSTEM_ALL);
+		struct dispatcher_node *endpoint = dispatcher_node_create_endpoint(CONFIG_ENDPOINT_ROOT, PERMS_ALL);
 
-		if(acceptor != NULL) {
-			if(!dispatcher_insert(acceptor)) {
-				fde_destroy(acceptor);
+		if(endpoint != NULL) {
+			if(!dispatcher_insert(endpoint)) {
+				dispatcher_node_destroy(endpoint);
 			}
 		} else {
-			log_error("dispatcher_init: Unable to create main '"CONFIG_CONTROLLERS_FIRST"' acceptor");
+			log_error("dispatcher_init: Unable to create '"CONFIG_ENDPOINT_ROOT"' endpoint");
 		}
 	} else {
-		log_error("dispatcher_init: Unable to create controllers directory '"CONFIG_CONTROLLERS_DIRECTORY"': %m");
+		log_error("dispatcher_init: Unable to create controllers directory '"CONFIG_ENDPOINTS_DIRECTORY"': %m");
 	}
 }
 
 static void
 dispatcher_preorder_cleanup(struct tree_node *node) {
-
 	if(node != NULL) {
-		struct fde *fde = node->element;
+		struct dispatcher_node *dispatched = node->element;
 
-		fde_destroy(fde);
+		dispatcher_node_destroy(dispatched);
 
 		dispatcher_preorder_cleanup(node->left);
 		dispatcher_preorder_cleanup(node->right);
@@ -122,17 +102,15 @@ dispatcher_preorder_cleanup(struct tree_node *node) {
 
 void
 dispatcher_deinit(void) {
-
-	dispatcher_preorder_cleanup(dispatcher.fds.root);
+	dispatcher_preorder_cleanup(dispatcher.nodes.root);
 #ifdef CONFIG_FULL_CLEANUP
-	tree_deinit(&dispatcher.fds);
-	free(dispatcher.sets);
+	tree_deinit(&dispatcher.nodes);
 #endif
 }
 
 int
 dispatcher_lastfd(void) {
-	struct tree_node *current = dispatcher.fds.root;
+	struct tree_node *current = dispatcher.nodes.root;
 	int lastfd = -1;
 
 	if(current != NULL) {
@@ -140,8 +118,8 @@ dispatcher_lastfd(void) {
 			current = current->right;
 		}
 
-		const struct fde *fde = current->element;
-		lastfd = fde->fd;
+		const struct dispatcher_node *dispatched = current->element;
+		lastfd = dispatched->fd;
 	}
 
 	return lastfd;
@@ -149,92 +127,69 @@ dispatcher_lastfd(void) {
 
 fd_set *
 dispatcher_readset(void) {
-
-	return memcpy(&dispatcher.sets->readset,
-		&dispatcher.sets->activeset,
-		sizeof(fd_set));
+	return memcpy(&dispatcher.readset, &dispatcher.activeset, sizeof(fd_set));
 }
 
 static void
-dispatcher_handle_acceptor(struct fde *acceptor) {
-	struct fde *controller
-		= fde_create_controller(acceptor);
-
-	if(controller != NULL
-		&& !dispatcher_insert(controller)) {
-		fde_destroy(controller);
-	}
-}
-
-static void
-dispatcher_handle_controller(struct fde *controller) {
+dispatcher_handle_ipc(struct dispatcher_node *ipc) {
 	char buffer[CONFIG_READ_BUFFER_SIZE];
-	ssize_t readval;
+	ssize_t readval = read(ipc->fd, buffer, sizeof(buffer));
 
-	if((readval = read(controller->fd, buffer, sizeof(buffer))) > 0) {
-		const char *current = buffer;
-		const char * const end = current + readval;
+	if(readval > 0) {
+		const char *current = buffer, * const end = buffer + readval;
 
-		while(current < end) {
-			struct control *control = controller->control;
-			if(control_update(control, *current)
-				&& COMMAND_IS_VALID(control->command)
-				&& ((controller->perms | (1 << control->command)) == controller->perms)) {
-				if(control->command == COMMAND_CREATE_CONTROLLER) {
-					struct fde *acceptor
-						= fde_create_acceptor(control->cctl.name.value,
-							controller->perms
-							& ~control->cctl.permsmask);
+		while(current != end) {
+			switch(dispatcher_node_ipc_input(ipc, *current)) {
+			case IPC_CREATE_ENDPOINT: {
+				struct dispatcher_node *endpoint = dispatcher_node_ipc_create_endpoint(ipc);
 
-					if(acceptor != NULL) {
-						if(!dispatcher_insert(acceptor)) {
-							fde_destroy(acceptor);
-						}
-					} else {
-						log_error("dispatcher_handle_controller: Unable to create '%s' acceptor",
-							control->cctl.name.value);
-					}
-				} else {
-					struct scheduler_activity activity = {
-						.when = control->planified.when,
-						.action = (int) control->command
-					};
-
-					if(COMMAND_IS_SYSTEM(control->command)
-						|| (COMMAND_IS_DAEMON(control->command) 
-							&& (activity.daemon = configuration_daemon_find(control->planified.daemon.value)) != NULL)) {
-						scheduler_schedule(&activity);
-					} else {
-						log_error("dispatcher_handle_controller: Unable to find daemon");
+				if(endpoint != NULL) {
+					if(!dispatcher_insert(endpoint)) {
+						dispatcher_node_destroy(endpoint);
 					}
 				}
+			} break;
+			case IPC_DAEMON:
+			case IPC_SYSTEM: {
+				struct scheduler_activity activity;
+				dispatcher_node_ipc_activity(ipc, &activity);
+				scheduler_schedule(&activity);
+			} break;
+			default: /* dismiss */
+				break;
 			}
 
-			current += 1;
+			current++;
 		}
-	} else if(readval == 0) {
-		dispatcher_remove(controller);
-		fde_destroy(controller);
+	} else {
+		if(readval != 0) {
+			log_error("dispatcher_handle: read: %m");
+		}
+
+		dispatcher_remove(ipc);
+		dispatcher_node_destroy(ipc);
 	}
 }
 
 void
 dispatcher_handle(unsigned int fds) {
-	fd_set *readset = &dispatcher.sets->readset;
+	const fd_set * const readset = &dispatcher.readset;
 
-	for(unsigned int fd = 0;
-		fds != 0 && fd < FD_SETSIZE;
-		fd += 1) {
-
+	for(unsigned int fd = 0; fds != 0 && fd < FD_SETSIZE; fd++) {
 		if(FD_ISSET(fd, readset)) {
-			struct fde *fde = dispatcher_find(fd);
-			fds -= 1;
+			struct dispatcher_node *dispatched = dispatcher_find(fd);
 
-			if(fde->type == FDE_TYPE_ACCEPTOR) {
-				dispatcher_handle_acceptor(fde);
+			if(dispatched->isendpoint) {
+				struct dispatcher_node *ipc = dispatcher_node_create_ipc(dispatched);
+
+				if(ipc != NULL && !dispatcher_insert(ipc)) {
+					dispatcher_node_destroy(ipc);
+				}
 			} else {
-				dispatcher_handle_controller(fde);
+				dispatcher_handle_ipc(dispatched);
 			}
+
+			fds--;
 		}
 	}
 }
