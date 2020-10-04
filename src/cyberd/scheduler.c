@@ -6,9 +6,9 @@
 #include <stdbool.h>
 #include <time.h>
 
-#define HEAP_INDEX_PARENT(index)	(((index) - 1) / 2)
-#define HEAP_INDEX_CHILD_LEFT(index)	(2 * (index) + 1)
-#define HEAP_INDEX_CHILD_RIGHT(index)	(2 * (index) + 2)
+#define HEAP_INDEX_PARENT(index)      (((index) - 1) / 2)
+#define HEAP_INDEX_CHILD_LEFT(index)  (2 * (index) + 1)
+#define HEAP_INDEX_CHILD_RIGHT(index) (2 * (index) + 2)
 
 static struct {
 	size_t n, capacity;
@@ -17,7 +17,6 @@ static struct {
 
 void
 scheduler_init(void) {
-
 	scheduler.n = 0;
 	scheduler.capacity = 0;
 	scheduler.schedule = NULL;
@@ -26,14 +25,12 @@ scheduler_init(void) {
 #ifdef CONFIG_FULL_CLEANUP
 void
 scheduler_deinit(void) {
-
 	free(scheduler.schedule);
 }
 #endif
 
 const struct timespec *
 scheduler_next(void) {
-
 	if (scheduler.n != 0) {
 		static struct timespec timeout;
 		time_t when = scheduler.schedule[0].when;
@@ -41,7 +38,7 @@ scheduler_next(void) {
 		clock_gettime(CLOCK_REALTIME, &timeout);
 
 		if (timeout.tv_nsec > 0) {
-			when -= 1;
+			when--;
 			timeout.tv_nsec = 1000000000 - timeout.tv_nsec;
 		} else {
 			timeout.tv_nsec = 0;
@@ -62,28 +59,22 @@ scheduler_next(void) {
 
 void
 scheduler_empty(void) {
-
 	scheduler.n = 0;
 }
 
 static inline void
 scheduler_expand(void) {
-
 	scheduler.capacity += 64;
 	scheduler.schedule = realloc(scheduler.schedule, sizeof (*scheduler.schedule) * scheduler.capacity);
 }
 
 static inline bool
-scheduler_prior(size_t index1,
-	size_t index2) {
-
-	return scheduler.schedule[index1].when
-		< scheduler.schedule[index2].when;
+scheduler_prior(size_t index1, size_t index2) {
+	return scheduler.schedule[index1].when < scheduler.schedule[index2].when;
 }
 
 static inline void
-scheduler_swap(size_t index1,
-	size_t index2) {
+scheduler_swap(size_t index1, size_t index2) {
 	struct scheduler_activity swap = scheduler.schedule[index1];
 
 	scheduler.schedule[index1] = scheduler.schedule[index2];
@@ -112,20 +103,17 @@ scheduler_sift_down(size_t index) {
 	 * while is not a leaf
 	 */
 	while (child < scheduler.n) {
-
 		/*
 		 * If has a right child, and is prior to left,
 		 * go to right
 		 */
 		if (child < scheduler.n - 1
 			&& scheduler_prior(child + 1, child)) {
-
-			child += 1;
+			child++;
 		}
 
 		/* If child has higher priority */
 		if (scheduler_prior(child, index)) {
-
 			scheduler_swap(child, index);
 			index = child;
 			child = HEAP_INDEX_CHILD_LEFT(index);
@@ -138,7 +126,6 @@ scheduler_sift_down(size_t index) {
 
 void
 scheduler_schedule(const struct scheduler_activity *activity) {
-
 	if (scheduler.n == scheduler.capacity) {
 		scheduler_expand();
 	}
@@ -155,9 +142,8 @@ scheduler_schedule(const struct scheduler_activity *activity) {
  */
 void
 scheduler_dequeue(struct scheduler_activity *activity) {
-
 	*activity = scheduler.schedule[0];
-	scheduler.n -= 1;
+	scheduler.n--;
 	scheduler.schedule[0] = scheduler.schedule[scheduler.n];
 
 	scheduler_sift_down(0);

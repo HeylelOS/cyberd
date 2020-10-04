@@ -13,7 +13,7 @@ void
 dispatcher_init(void);
 
 /**
- * Required because we must unlink socket's acceptors
+ * Required because we must unlink endpoints' socket
  */
 void
 dispatcher_deinit(void);
