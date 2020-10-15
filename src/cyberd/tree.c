@@ -119,7 +119,7 @@ tree_node_insert(struct tree_node *root,
 /*
  * Returns the root of the tree
  * and the removed node in removed,
- * left unchanged if the node dosn't exist
+ * left unchanged if the node doesn't exist
  */
 static struct tree_node *
 tree_node_remove_by_hash(struct tree_node *root,
