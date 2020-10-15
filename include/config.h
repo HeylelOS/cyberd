@@ -1,7 +1,9 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-/*
+/* On Darwin, it seems like htonll and ntohll are imported with libc */
+#ifndef __APPLE__
+
 #if __BYTE_ORDER == __BIG_ENDIAN
 #define ntohll(x) (x)
 #define htonll(x) (x)
@@ -20,7 +22,8 @@
 #else
 #error "Unsupported machine word endianness"
 #endif
-*/
+
+#endif
 
 #ifdef NDEBUG
 /* Release */

@@ -347,8 +347,8 @@ daemon_conf_parse_general(struct daemon_conf *conf,
 
 			conf->umask = cmask & 0x1FF;
 
-		} else if(strcmp(key, "sigend") == 0) {
-			if(daemon_conf_parse_general_signal(value, &conf->sigend) == -1) {
+		} else if(strcmp(key, "sigfinish") == 0) {
+			if(daemon_conf_parse_general_signal(value, &conf->sigfinish) == -1) {
 				return -1;
 			}
 		} else if(strcmp(key, "sigreload") == 0) {
@@ -446,7 +446,7 @@ daemon_conf_init(struct daemon_conf *conf) {
 	conf->environment = NULL;
 	conf->wd = NULL;
 
-	conf->sigend = SIGTERM;
+	conf->sigfinish = SIGTERM;
 	conf->sigreload = SIGHUP;
 
 	conf->uid = getuid();

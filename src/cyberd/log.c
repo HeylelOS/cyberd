@@ -34,8 +34,9 @@ log_print(const char *format, ...) {
 	va_list ap;
 
 	va_start(ap, format);
+#ifdef NDEBUG
 	vsyslog(LOG_INFO, format, ap);
-#ifndef NDEBUG
+#else
 	vprintf(format, ap);
 	putchar('\n');
 #endif
