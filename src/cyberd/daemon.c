@@ -239,9 +239,9 @@ daemon_stop(struct daemon *daemon) {
 
 	switch (daemon->state) {
 	case DAEMON_RUNNING:
-		kill(daemon->pid, daemon->conf.sigend);
+		kill(daemon->pid, daemon->conf.sigfinish);
 		daemon->state = DAEMON_STOPPING;
-		log_print("daemon_stop: '%s' stopping with signal %d", daemon->name, daemon->conf.sigend);
+		log_print("daemon_stop: '%s' stopping with signal %d", daemon->name, daemon->conf.sigfinish);
 		break;
 	case DAEMON_STOPPED:
 		log_print("daemon_stop: '%s' already stopped", daemon->name);

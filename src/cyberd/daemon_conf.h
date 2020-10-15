@@ -12,7 +12,7 @@ struct daemon_conf {
 	char **environment; /**< Command line environment variables */
 	char *wd; /**< Working directory of the process */
 
-	int sigend; /**< Signal used to stop the process, default SIGTERM */
+	int sigfinish; /**< Signal used to terminate the process, default SIGTERM */
 	int sigreload; /**< Signal used to reload the process configuration, default SIGHUP */
 
 	uid_t uid; /**< User-id the process wil be executed with */

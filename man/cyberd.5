@@ -17,7 +17,7 @@ group=<name|id>: Group name/id of the daemon.
 .PP
 umask=<octal numeric value>: umask of the daemon, default to cyberd's one (022).
 .PP
-sigend=<signal name| signal number>: Signal used to stop the daemon.
+sigfinish=<signal name| signal number>: Signal used to terminate the daemon.
 .PP
 sigreload=<signal name| signal number>: Signal used to reload the daemon's configuration.
 .PP
@@ -33,13 +33,13 @@ load: Start the daemon when cyberd is starting.
 .PP
 reload: Start the daemon when cyberd is reloading its configuration.
 .PP
-any exit: Start the daemon when the daemon as exited in any way.
+any exit: Start the daemon when the daemon exited in any way.
 .PP
-exit: Start the daemon when the daemon as exited with _exit(2).
+exit: Start the daemon when the daemon exited with _exit(2).
 .PP
-exit success: Start the daemon when the daemon as exited with _exit(2) with exit code 0.
+exit success: Start the daemon when the daemon exited with _exit(2) with exit code 0.
 .PP
-exit failure: Start the daemon when the daemon as exited with _exit(2) with an exit code not equal to 0.
+exit failure: Start the daemon when the daemon exited with _exit(2) with an exit code not equal to 0.
 .PP
 killed: Start the daemon when the daemon was killed by a signal.
 .PP
