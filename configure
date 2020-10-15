@@ -25,7 +25,6 @@ Some influential environment variables:
   LIBRARIES        where libraries are built.
   OBJECTS          where intermediate object files are built.
   MKDIR            tool used to create objects subdirectories.
-  LD               linker to use.
   LDFLAGS          arguments to pass to the linker.
   CC               C compiler to use, default [clang gcc tcc cc].
   CFLAGS           C compiler flags [-O -Wall -fPIC -DNDEBUG -Iinclude] when -r specified, [-g -Wall -fPIC -Iinclude] else.
@@ -46,12 +45,6 @@ done
 
 shift $((OPTIND - 1))
 [ ! -z "$*" ] && export -- "$@"
-
-case "`uname -s`" in
-Darwin) [ -z "${LDFLAGS}" ] && LDFLAGS='-lSystem' ;;
-Linux) [ -z "${LDFLAGS}" ] && LDFLAGS='-lc' ;;
-*) printf 'Unsupported operating system\n' && exit 1 ;;
-esac
 
 if [ -z "${CC}" ]
 then
@@ -86,18 +79,6 @@ then printf "Using mkdir '%s'\n" "${MKDIR}"
 else printf 'Unable to find mkdir\n' ; exit 1
 fi
 
-if [ -z "${LD}" ]
-then
-	for LD in ld gold
-	do command -v "${LD}" && break
-	done
-fi
-
-if [ ! -z "${LD}" ]
-then printf "Using linker '%s'\n" "${LD}"
-else printf 'Unable to find linker\n' ; exit 1
-fi
-
 [ -z "${CYBERCTLFLAGS}" ] && CYBERCTLFLAGS=""
 [ -z "${CYBERDFLAGS}" ] && CYBERDFLAGS=""
 
@@ -106,16 +87,33 @@ fi
 [ -z "${OBJECTS}" ] && OBJECTS="build/objects"
 mkdir -p "${BINARIES}" "${LIBRARIES}" "${OBJECTS}"
 
+[ -z "${CONFIG_DAEMONCONFS_DIRECTORY}" ] && CONFIG_DAEMONCONFS_DIRECTORY='/etc/daemons'
+[ -z "${CONFIG_ENDPOINTS_DIRECTORY}" ] && CONFIG_ENDPOINTS_DIRECTORY='/var/run/init'
+[ -z "${CONFIG_ENDPOINT_ROOT}" ] && CONFIG_ENDPOINT_ROOT='initctl'
+[ -z "${CONFIG_DEFAULT_UMASK}" ] && CONFIG_DEFAULT_UMASK='022'
+[ -z "${CONFIG_CONNECTIONS_LIMIT}" ] && CONFIG_CONNECTIONS_LIMIT='64'
+[ -z "${CONFIG_READ_BUFFER_SIZE}" ] && CONFIG_READ_BUFFER_SIZE='512'
+[ -z "${CONFIG_NAME_BUFFER_DEFAULT_CAPACITY}" ] && CONFIG_NAME_BUFFER_DEFAULT_CAPACITY='128'
+
+sed \
+	-e "s/@CONFIG_DAEMONCONFS_DIRECTORY@/${CONFIG_DAEMONCONFS_DIRECTORY//'/'/'\/'}/" \
+	-e "s/@CONFIG_ENDPOINTS_DIRECTORY@/${CONFIG_ENDPOINTS_DIRECTORY//'/'/'\/'}/" \
+	-e "s/@CONFIG_ENDPOINT_ROOT@/${CONFIG_ENDPOINT_ROOT}/" \
+	-e "s/@CONFIG_DEFAULT_UMASK@/${CONFIG_DEFAULT_UMASK}/" \
+	-e "s/@CONFIG_CONNECTIONS_LIMIT@/${CONFIG_CONNECTIONS_LIMIT}/" \
+	-e "s/@CONFIG_READ_BUFFER_SIZE@/${CONFIG_READ_BUFFER_SIZE}/" \
+	-e "s/@CONFIG_NAME_BUFFER_DEFAULT_CAPACITY@/${CONFIG_NAME_BUFFER_DEFAULT_CAPACITY}/" \
+	include/config.h.in > include/config.h
+
 cat - Makefile.rules <<EOF > Makefile
 BINARIES=${BINARIES}
 LIBRARIES=${LIBRARIES}
 OBJECTS=${OBJECTS}
 
 MKDIR=${MKDIR}
-LD=${LD}
 LDFLAGS=${LDFLAGS}
 CC=${CC}
-CFLAGS=${CFLAGS}
+CFLAGS=${CFLAGS} -Iinclude
 
 CYBERCTLFLAGS=${CYBERCTLFLAGS}
 CYBERDFLAGS=${CYBERDFLAGS}

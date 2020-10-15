@@ -5,7 +5,7 @@ $(OBJECTS)/cyberctl:
 $(OBJECTS)/cyberctl/main.o: src/cyberctl/main.c $(OBJECTS)/cyberctl
 	$(CC) $(CFLAGS) -c -o $@ $<
 $(BINARIES)/cyberctl: $(OBJECTS)/cyberctl/main.o
-	$(LD) $(LDFLAGS) $(CYBERCTLFLAGS) -o $@ $^
+	$(CC) $(LDFLAGS) $(CYBERCTLFLAGS) -o $@ $^
 $(OBJECTS)/cyberd:
 	$(MKDIR) -p $@
 $(OBJECTS)/cyberd/configuration.o: src/cyberd/configuration.c $(OBJECTS)/cyberd
@@ -33,7 +33,7 @@ $(OBJECTS)/cyberd/spawns.o: src/cyberd/spawns.c $(OBJECTS)/cyberd
 $(OBJECTS)/cyberd/tree.o: src/cyberd/tree.c $(OBJECTS)/cyberd
 	$(CC) $(CFLAGS) -c -o $@ $<
 $(BINARIES)/cyberd: $(OBJECTS)/cyberd/configuration.o $(OBJECTS)/cyberd/daemon.o $(OBJECTS)/cyberd/daemon_conf.o $(OBJECTS)/cyberd/dispatcher.o $(OBJECTS)/cyberd/dispatcher_node.o $(OBJECTS)/cyberd/hash.o $(OBJECTS)/cyberd/log.o $(OBJECTS)/cyberd/main.o $(OBJECTS)/cyberd/scheduler.o $(OBJECTS)/cyberd/signals.o $(OBJECTS)/cyberd/spawns.o $(OBJECTS)/cyberd/tree.o
-	$(LD) $(LDFLAGS) $(CYBERDFLAGS) -o $@ $^
+	$(CC) $(LDFLAGS) $(CYBERDFLAGS) -o $@ $^
 all: $(BINARIES)/cyberctl $(BINARIES)/cyberd
 clean:
 	rm -rf $(BINARIES)/* $(LIBRARIES)/* $(OBJECTS)/*

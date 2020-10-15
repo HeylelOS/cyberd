@@ -12,8 +12,8 @@ cyberd daemons configurations are separated into sections. Three sections are av
 - **user=\<name|id\>**: User name/id of the daemon.
 - **group=\<name|id\>**: Group name/id of the daemon.
 - **umask=\<octal numeric value\>**: umask of the daemon, default to cyberd's one (022).
-- **sigend=\<signal name| signal number\>**: Signal used to stop the daemon.
-- **sigreload=\<signal name| signal number\>**: Signal used to reload the daemon's configuration.
+- **sigfinish=\<signal name|signal number\>**: Signal used to terminate the daemon.
+- **sigreload=\<signal name|signal number\>**: Signal used to reload the daemon's configuration.
 - **arguments=\<argument list\>**: Argument list of the process, if not present, the first argument will be the daemon's name. The list is truncated according to spaces.
 - **priority=\<priority\>**: Priority of the newly created daemon, must be between -20 and 20, default to 0.
 
