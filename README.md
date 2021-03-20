@@ -26,22 +26,26 @@ cyberd can:
 
 For further details, you can read the manual pages or even available tests for examples of simple daemons configurations.
 
-## Build
+## Configure, build and install
 
-You should be able to configure and build it with:
+CMake is used to configure, build and install binaires and documentations, version 3.14 minimum is required:
 
 ```sh
-./configure
-make
+mkdir -p build && cd build
+cmake ../
+cmake --build .
+cmake --install .
 ```
 
-Note sometimes configure might fail because ld requires runtime components.
-You can easily solve this by setting the LD to the used compiler.
-The latest usually encapsulates linking well.
+## Documentation
 
-## Tests
+HTML documentation for the library are built using [Doxygen](https://github.com/doxygen/doxygen).
+Doxygen version 1.8.0 minimum is required (markdown support for `docs/` files).
+CMake will expose documentation through the `doc` target.
 
-You should be able to test the currently installed debug version by executing (just change your PATH to test another):
-
-	./test/cyberd/test.sh
+```sh
+mkdir -p build && cd build
+cmake ../
+cmake --build . --target doc
+```
 

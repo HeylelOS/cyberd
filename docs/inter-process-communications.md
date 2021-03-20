@@ -6,7 +6,7 @@ Each endpoint has an associated set of capabilities. Those determine which comma
 
 ## Generic command format
 
-Commands are binary coded, using network byte order (MSB, Big-Endian).
+Commands are binary coded, using network byte order (MSB first, Big-Endian).
 
 Commands are succession of components, there exists three kinds of commands: Daemons related, system related and miscellaneous.
 
@@ -14,7 +14,7 @@ Components are of the following:
 - \<command\>: One byte unsigned integer, representing the kind of command. In the following section, the value will be represented using an hexadecimal notation.
 - \<when\>: Eight bytes integer, interpreted as a unix timestamp, corresponds to universal UTC time.
 - \<removed capabilities\>: Eight bytes integer, bitmask of removed capabilities, each \<command\> value is represented by the \<command\>th bit.
-- \<name\> refers to a filename not beginning with a '.', nor composed by any '/', ended by a zero byte (also called referred to as NUL character). The filename max size also applies, to avoid attacks by buffer overflow.
+- \<name\> refers to a filename not beginning with a `.`, nor composed by any `/`, ended by a zero byte (also referred to as NUL character). The filename max size also applies, to avoid attacks by buffer overflow.
 
 ## Daemons related commands
 
@@ -32,5 +32,5 @@ Components are of the following:
 
 ## Miscellaneous commands
 
-- 0x01 \<removed capabilities\> \<name\> : Create a new control socket
+- 0x01 \<removed capabilities\> \<name\> : Create a new endpoint
 
