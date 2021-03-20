@@ -1,4 +1,4 @@
 path=/bin/false
-@start
+[start]
 load
 reload
