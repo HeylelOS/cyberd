@@ -52,8 +52,7 @@ daemon_conf_deinit(struct daemon_conf *conf);
  * @return Whether it was successfull
  */
 bool
-daemon_conf_parse(struct daemon_conf *conf,
-	FILE *filep);
+daemon_conf_parse(struct daemon_conf *conf, FILE *filep);
 
 /* DAEMON_CONF_H */
 #endif

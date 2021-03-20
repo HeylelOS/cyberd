@@ -4,6 +4,7 @@
 #include "config.h"
 
 #include <stdlib.h>
+#include <stdbool.h>
 #include <signal.h>
 #include <string.h>
 #include <unistd.h>
@@ -11,6 +12,8 @@
 #include <grp.h>
 #include <ctype.h>
 #include <errno.h>
+
+#define DAEMON_CONF_ARRAY_SIZE(array) (sizeof((array)) / sizeof(*(array)))
 
 #define DAEMON_CONF_STRINGLIST_DEFAULT_CAPACITY 16
 
@@ -22,6 +25,12 @@ enum daemon_conf_section {
 	SECTION_ENVIRONMENT,
 	SECTION_START,
 	SECTION_UNKNOWN,
+};
+
+static const char * const sections[] = {
+	"general",
+	"environment",
+	"start"
 };
 
 static const struct signalpair {
@@ -73,6 +82,81 @@ daemon_conf_stringlist_free(char **stringlist) {
 		}
 		free(stringlist);
 	}
+}
+
+/**
+ * Trims and parse a configuration file line.
+ * @param line Line to parse, length of @p length.
+ * @param length Length of @p line.
+ * @param keyp Out variable corresponding to the key of the value, the scalar value or the section name.
+ * @param valuep Out variable corresponding to the associated value of the key, NULL if @p keyp is a scalar value, unchanged if @p keyp is a section name.
+ * @return true if @p keyp holds a section name, false if it holds a key or a scalar value.
+ */
+static bool
+daemon_conf_parse_line(char *line, size_t length, const char **keyp, const char **valuep) {
+	/* Shorten up to the comment if there is one */
+	const char *comment = strchr(line, '#');
+	if(comment != NULL) {
+		length = comment - line;
+	}
+
+	/* Trim the beginning */
+	while(isspace(*line)) {
+		length--;
+		line++;
+	}
+
+	/* Trim the end */
+	while(isspace(line[length - 1])) {
+		length--;
+	}
+	/* If there wasn't anything to end-trim, no problem,
+	we will just be replacing the previous nul delimiter */
+	line[length] = '\0';
+
+	if(*line == '[' && line[length - 1] == ']') {
+		/* We are a new section delimiter */
+		/* Trim begnning of section name */
+		do {
+			length--;
+			line++;
+		} while(isspace(*line));
+
+		/* Trim end of section name */
+		do {
+			length--;
+		} while(isspace(line[length - 1]));
+		line[length] = '\0';
+
+		*keyp = line;
+
+		return true;
+	}
+
+	/* Assign to key */
+	*keyp = line;
+
+	/* Assign to value */
+	char *separator = strchr(line, '=');
+	if(separator != NULL) {
+		char *preseparator = separator - 1;
+
+		/* Trim the end of key */
+		if(preseparator != line) {
+			while(isspace(*preseparator)) {
+				preseparator--;
+			}
+		}
+		preseparator[1] = '\0';
+
+		/* Trim the beginning of value */
+		do {
+			separator++;
+		} while(isspace(*separator));
+	}
+	*valuep = separator;
+
+	return false;
 }
 
 /**
@@ -203,7 +287,7 @@ daemon_conf_parse_general_signal(const char *signame, int *signump) {
 			}
 	} else {
 		const struct signalpair *current = signals,
-			* const signalsend = signals + sizeof(signals) / sizeof(*signals);
+			* const signalsend = signals + DAEMON_CONF_ARRAY_SIZE(signals);
 
 		if(strncasecmp("SIG", signame, 3) == 0) {
 			signame += 3;
@@ -275,7 +359,7 @@ daemon_conf_parse_general_arguments(const char *args, char ***argumentsp) {
 }
 
 /**
- * Parses a priority, must be between -20 and 20
+ * Parses a priority, must be between -20 and 19
  * @param prio Priority to parse
  * @param priorityp Pointer to the priority to set
  * @return 0 on success, -1 else
@@ -286,7 +370,7 @@ daemon_conf_parse_general_priority(const char *prio, int *priorityp) {
 	long lpriority = strtol(prio, &prioend, 10);
 
 	if(*prio == '\0' || *prioend != '\0'
-		|| lpriority < -20 || lpriority > 20) {
+		|| lpriority < -20 || lpriority > 19) {
 
 		log_error("daemon_conf: Unable to parse priority '%s'", prio);
 
@@ -306,98 +390,136 @@ daemon_conf_parse_general_priority(const char *prio, int *priorityp) {
  * @return 0 on success or unknown key, -1 else
  */
 static int
-daemon_conf_parse_general(struct daemon_conf *conf,
-	const char *key, const char *value) {
+daemon_conf_parse_general(struct daemon_conf *conf, const char *key, const char *value) {
+	static const char * const keys[] = {
+		"path",
+		"workdir",
+		"user",
+		"group",
+		"umask",
+		"sigfinish",
+		"sigreload",
+		"arguments",
+		"priority"
+	};
 
-	if(value != NULL) {
-		if(strcmp(key, "path") == 0) {
-			char *newpath = strdup(value);
+	const char * const *current = keys,
+		* const *keysend = keys + DAEMON_CONF_ARRAY_SIZE(keys);
 
-			if(newpath != NULL) {
-				free(conf->path);
-				conf->path = newpath;
-			} else {
-				return -1;
-			}
-		} else if(strcmp(key, "workdir") == 0) {
-			char *newwd;
+	while(current != keysend && strcmp(*current, key) != 0) {
+		current++;
+	}
 
-			if(*value == '/'
-				&& (newwd = strdup(value)) != NULL) {
-				free(conf->wd);
-				conf->wd = newwd;
-			} else {
-				return -1;
-			}
-		} else if(strcmp(key, "user") == 0) {
-			if(daemon_conf_parse_general_uid(value, &conf->uid) == -1) {
-				return -1;
-			}
-		} else if(strcmp(key, "group") == 0) {
-			if(daemon_conf_parse_general_gid(value, &conf->gid) == -1) {
-				return -1;
-			}
-		} else if(strcmp(key, "umask") == 0) {
-			char *valueend;
-			unsigned long cmask = strtoul(value, &valueend, 8);
+	int retval;
+	if(current != keysend) {
+		if(value != NULL) {
+			switch(current - keys) {
+			case 0: { /* path */
+				char * const newpath = strdup(value);
 
-			if(*value == '\0' || *valueend != '\0') {
-				return -1;
-			}
+				if(newpath != NULL) {
+					retval = 0;
+					free(conf->path);
+					conf->path = newpath;
+				} else {
+					retval = -1;
+				}
 
-			conf->umask = cmask & 0x1FF;
+			}	break;
+			case 1: /* workdir */
+				if(*value == '/') {
+					char * const newwd = strdup(value);
 
-		} else if(strcmp(key, "sigfinish") == 0) {
-			if(daemon_conf_parse_general_signal(value, &conf->sigfinish) == -1) {
-				return -1;
-			}
-		} else if(strcmp(key, "sigreload") == 0) {
-			if(daemon_conf_parse_general_signal(value, &conf->sigreload) == -1) {
-				return -1;
-			}
-		} else if(strcmp(key, "arguments") == 0) {
-			if(daemon_conf_parse_general_arguments(value, &conf->arguments) == -1) {
-				return -1;
-			}
-		} else if(strcmp(key, "priority") == 0) {
-			if(daemon_conf_parse_general_priority(value, &conf->priority) == -1) {
-				return -1;
+					if(newwd != NULL) {
+						free(conf->wd);
+						conf->wd = newwd;
+						retval = 0;
+						break;
+					}
+				}
+				retval = -1;
+				break;
+			case 2: /* user */
+				retval = daemon_conf_parse_general_uid(value, &conf->uid);
+				break;
+			case 3: /* group */
+				retval = daemon_conf_parse_general_gid(value, &conf->gid);
+				break;
+			case 4: { /* umask */
+				char *valueend;
+				const unsigned long cmask = strtoul(value, &valueend, 8);
+
+				if(*value != '\0' && *valueend == '\0') {
+					retval = 0;
+					conf->umask = cmask & 0x1FF;
+				} else {
+					retval = -1;
+				}
+
+			}	break;
+			case 5: /* sigfinish */
+				retval = daemon_conf_parse_general_signal(value, &conf->sigfinish);
+				break;
+			case 6: /* sigreload */
+				retval = daemon_conf_parse_general_signal(value, &conf->sigreload);
+				break;
+			case 7: /* arguments */
+				retval = daemon_conf_parse_general_arguments(value, &conf->arguments);
+				break;
+			case 8: /* priority */
+				retval = daemon_conf_parse_general_priority(value, &conf->priority);
+				break;
+			default:
+				break;
 			}
 		}
 	}
 
-	return 0;
+	return retval;
 }
 
 static char *
-daemon_conf_envdup(const char *name) {
-	const size_t length = strlen(name);
-	char *string = malloc(length * 2 + 2);
+daemon_conf_envdup(const char *key, const char *value) {
+	const size_t keylength = strlen(key);
+	size_t valuelength;
 
-	if(string != NULL) {
-		*stpncpy(string, name, length) = '=';
-		strncpy(string + length + 1, name, length);
+	if(value != NULL) {
+		valuelength = strlen(value);
+	} else {
+		valuelength = keylength;
+		value = key;
 	}
 
-	return string;
+	char string[keylength + valuelength + 2];
+
+	*stpncpy(string, key, keylength) = '=';
+	strncpy(string + keylength + 1, value, valuelength + 1);
+
+	return strndup(string, sizeof(string));
 }
 
 /**
  * Adds an element to the daemon environment
  * @param conf Configuration being parsed
- * @param string String of the form <key>=<value>
- * @param envcapp In-Out value correspondig to the capacity of conf->environment
- * @return 0 on success or unknown key, -1 else
+ * @param key Key for the environment variable
+ * @param value Value associated with @p key for the environment variable, or NULL
+ * @param envcapp In-Out value corresponding to the capacity of conf->environment
+ * @return 0 on success, -1 else
  */
 static int
-daemon_conf_parse_environment(struct daemon_conf *conf, const char *str, size_t *envcapp) {
-	char *string = strchr(str, '=') == NULL ? daemon_conf_envdup(str) : strdup(str);
+daemon_conf_parse_environment(struct daemon_conf *conf, const char *key, const char *value, size_t *envcapp) {
+	char * const string = daemon_conf_envdup(key, value);
+	int retval = -1;
 
 	if(string != NULL) {
 		conf->environment = daemon_conf_stringlist_append(string, conf->environment, envcapp);
+
+		if(conf->environment != NULL) {
+			retval = 0;
+		}
 	}
 
-	return conf->environment != NULL ? 0 : -1;
+	return retval;
 }
 
 /**
@@ -408,30 +530,59 @@ daemon_conf_parse_environment(struct daemon_conf *conf, const char *str, size_t 
  * @return 0 on success or unknown key, -1 else
  */
 static int
-daemon_conf_parse_start(struct daemon_conf *conf,
-	const char *key, const char *value) {
+daemon_conf_parse_start(struct daemon_conf *conf, const char *key, const char *value) {
+	static const char * const keys[] = {
+		"load",
+		"reload",
+		"any exit",
+		"exit",
+		"exit success",
+		"exit failure",
+		"killed",
+		"dumped"
+	};
 
-	if(value == NULL) {
-		if(strcmp(key, "load") == 0) {
-			conf->start.load = 1;
-		} else if(strcmp(key, "reload") == 0) {
-			conf->start.reload = 1;
-		} else if(strcmp(key, "any exit") == 0) {
-			conf->start.exitsuccess = 1;
-			conf->start.exitfailure = 1;
-			conf->start.killed = 1;
-			conf->start.dumped = 1;
-		} else if(strcmp(key, "exit") == 0) {
-			conf->start.exitsuccess = 1;
-			conf->start.exitfailure = 1;
-		} else if(strcmp(key, "exit success") == 0) {
-			conf->start.exitsuccess = 1;
-		} else if(strcmp(key, "exit failure") == 0) {
-			conf->start.exitfailure = 1;
-		} else if(strcmp(key, "killed") == 0) {
-			conf->start.killed = 1;
-		} else if(strcmp(key, "dumped") == 0) {
-			conf->start.dumped = 1;
+	const char * const *current = keys,
+		* const *keysend = keys + DAEMON_CONF_ARRAY_SIZE(keys);
+
+	while(current != keysend && strcmp(*current, key) != 0) {
+		current++;
+	}
+
+	if(current != keysend) {
+		if(value == NULL) {
+			switch(current - keys) {
+			case 0: /* load */
+				conf->start.load = 1;
+				break;
+			case 1: /* reload */
+				conf->start.reload = 1;
+				break;
+			case 2: /* any exit */
+				conf->start.exitsuccess = 1;
+				conf->start.exitfailure = 1;
+				conf->start.killed = 1;
+				conf->start.dumped = 1;
+				break;
+			case 3: /* exit */
+				conf->start.exitsuccess = 1;
+				conf->start.exitfailure = 1;
+				break;
+			case 4: /* exit success */
+				conf->start.exitsuccess = 1;
+				break;
+			case 5: /* exit failure */
+				conf->start.exitfailure = 1;
+				break;
+			case 6: /* killed */
+				conf->start.killed = 1;
+				break;
+			case 7: /* dumped */
+				conf->start.dumped = 1;
+				break;
+			default:
+				break;
+			}
 		}
 	}
 
@@ -473,47 +624,43 @@ daemon_conf_deinit(struct daemon_conf *conf) {
 }
 
 bool
-daemon_conf_parse(struct daemon_conf *conf,
-	FILE *filep) {
+daemon_conf_parse(struct daemon_conf *conf, FILE *filep) {
 	enum daemon_conf_section section = SECTION_GENERAL;
-	char *line = NULL;
 	size_t linecap = 0, envcap = 0;
+	char *line = NULL;
 	int errors = 0;
 	ssize_t length;
 
 	/* Reading lines */
-	while((length = getline(&line, &linecap, filep)) != -1) {
-		if(length != 0 && line[length - 1] == '\n') {
-			line[length - 1] = '\0';
-		}
+	while(length = getline(&line, &linecap, filep), length != -1) {
+		const char *key, *value;
 
-		/* Reading beginning of section */
-		if(*line == '@') {
-			if(strcmp(line, "@general") == 0) {
-				section = SECTION_GENERAL;
-			} else if(strcmp(line, "@environment") == 0) {
-				section = SECTION_ENVIRONMENT;
-			} else if(strcmp(line, "@start") == 0) {
-				section = SECTION_START;
-			} else {
-				section = SECTION_UNKNOWN;
+		if(daemon_conf_parse_line(line, length, &key, &value)) {
+			const char * const *current = sections,
+				* const *sectionsend = sections + DAEMON_CONF_ARRAY_SIZE(sections);
+
+			while(current != sectionsend
+				&& strcmp(*current, key) != 0) {
+				current++;
 			}
-		} else if(*line != '\0'
-			&& *line != '#') {
-			char *value = line;
 
+			/* SECTION_UNKNOWN being the next after the last, it corresponds to sectionsend */
+			section = current - sections;
+
+		} else if(*key != '\0') { /* We don't take empty keys */
 			switch(section) {
 			case SECTION_GENERAL:
-				if(daemon_conf_parse_general(conf, strsep(&value, "="), value) != 0) {
+				if(daemon_conf_parse_general(conf, key, value) != 0) {
 					errors++;
 				}
 				break;
 			case SECTION_ENVIRONMENT:
-				if(daemon_conf_parse_environment(conf, value, &envcap) != 0) {
+				if(daemon_conf_parse_environment(conf, key, value, &envcap) != 0) {
 					errors++;
 				}
+				break;
 			case SECTION_START:
-				if(daemon_conf_parse_start(conf, strsep(&value, "="), value) != 0) {
+				if(daemon_conf_parse_start(conf, key, value) != 0) {
 					errors++;
 				}
 				break;
