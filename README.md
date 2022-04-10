@@ -22,30 +22,25 @@ cyberd can:
 - Reload daemons, by sending a SIGHUP or a custom signal.
 - End daemons, by sending them a SIGKILL signal.
 - Poweroff, Halt, Reboot, Suspend kernel.
-- Create new IPC sockets with less or equal rights than the previous one.
+- Create custom connection endpoints.
 
 For further details, you can read the manual pages or even available tests for examples of simple daemons configurations.
 
 ## Configure, build and install
 
-CMake is used to configure, build and install binaires and documentations, version 3.14 minimum is required:
+Meson is used to configure, build and install binaires and documentations:
 
 ```sh
-mkdir -p build && cd build
-cmake ../
-cmake --build .
-cmake --install .
+meson setup build
+meson compile -C build
+meson install -C build
 ```
 
 ## Documentation
 
-HTML documentation for the library are built using [Doxygen](https://github.com/doxygen/doxygen).
-Doxygen version 1.8.0 minimum is required (markdown support for `docs/` files).
-CMake will expose documentation through the `doc` target.
+The documentation is built through the `doc` target, if the required tools are available.
 
 ```sh
-mkdir -p build && cd build
-cmake ../
-cmake --build . --target doc
+meson compile -C build doc
 ```
 

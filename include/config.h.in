@@ -36,7 +36,7 @@
 /**
  * Macro specifiying where to look for daemons init files.
  */
-#define CONFIG_DAEMONCONFS_DIRECTORY "@CONFIG_DAEMONCONFS_DIRECTORY@"
+#define CONFIG_CONFIGURATION_DIRECTORY "@CONFIG_CONFIGURATION_DIRECTORY@"
 /**
  * Macro specifiying where to create endpoints.
  */
@@ -45,27 +45,27 @@
 /**
  * Macro specifiying the name of the first endpoint to be created.
  */
-#define CONFIG_ENDPOINT_ROOT "@CONFIG_ENDPOINT_ROOT@"
-
-/**
- * Macro specifiying the default umask for daemons.
- */
-#define CONFIG_DEFAULT_UMASK @CONFIG_DEFAULT_UMASK@
+#define CONFIG_ENDPOINTS_ROOT "@CONFIG_ENDPOINTS_ROOT@"
 
 /**
  * Macro specifiying the maximum connections cyberd can hold at one time.
  */
-#define CONFIG_CONNECTIONS_LIMIT @CONFIG_CONNECTIONS_LIMIT@
-
-/**
- * Macro specifiying the size of the buffer used to read from endpoints.
- */
-#define CONFIG_READ_BUFFER_SIZE @CONFIG_READ_BUFFER_SIZE@
+#define CONFIG_ENDPOINTS_CONNECTIONS @CONFIG_ENDPOINTS_CONNECTIONS@
 
 /**
  * Macro specifiying the default capacity of the buffer holding pathnames while parsing endpoints.
  */
-#define CONFIG_NAME_BUFFER_DEFAULT_CAPACITY @CONFIG_NAME_BUFFER_DEFAULT_CAPACITY@
+#define CONFIG_CONNECTIONS_NAME_BUFFER_DEFAULT_CAPACITY @CONFIG_CONNECTIONS_NAME_BUFFER_DEFAULT_CAPACITY@
+
+/**
+ * Macro specifiying the size of the buffer used to read from endpoints.
+ */
+#define CONFIG_CONNECTIONS_READ_BUFFER_SIZE @CONFIG_CONNECTIONS_READ_BUFFER_SIZE@
+
+/**
+ * Macro specifiying the default umask for daemons.
+ */
+#define CONFIG_DAEMONS_DEFAULT_UMASK @CONFIG_DAEMONS_DEFAULT_UMASK@
 
 /* CONFIG_H */
 #endif

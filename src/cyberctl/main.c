@@ -166,7 +166,7 @@ cyberctl_usage(const char *cyberctlname) {
 static struct cyberctl_args
 cyberctl_parse_args(int argc, char **argv) {
 	struct cyberctl_args args = {
-		.endpoint = CONFIG_ENDPOINT_ROOT,
+		.endpoint = CONFIG_ENDPOINTS_ROOT,
 		.when = 0,
 	};
 	bool epoch = false;

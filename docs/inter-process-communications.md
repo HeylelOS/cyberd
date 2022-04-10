@@ -2,7 +2,7 @@
 
 This document describes the format used to communicate with a cyberd instance.
 Through the use of dedicated sockets (called endpoints), the program requests actions to cyberd.
-Each endpoint has an associated set of capabilities. Those determine which commands cyberd will accept from the endpoint.
+Each endpoint has an associated set of capabilities. Those capabilities determine which commands cyberd will accept from connections made with this endpoint.
 
 ## Generic command format
 
@@ -13,7 +13,7 @@ Commands are succession of components, there exists three kinds of commands: Dae
 Components are of the following:
 - \<command\>: One byte unsigned integer, representing the kind of command. In the following section, the value will be represented using an hexadecimal notation.
 - \<when\>: Eight bytes integer, interpreted as a unix timestamp, corresponds to universal UTC time.
-- \<removed capabilities\>: Eight bytes integer, bitmask of removed capabilities, each \<command\> value is represented by the \<command\>th bit.
+- \<removed capabilities\>: Eight bytes integer, bitmask of removed capabilities, each \<command\> value is associated with the \<command\>th bit.
 - \<name\> refers to a filename not beginning with a `.`, nor composed by any `/`, ended by a zero byte (also referred to as NUL character). The filename max size also applies, to avoid attacks by buffer overflow.
 
 ## Daemons related commands
