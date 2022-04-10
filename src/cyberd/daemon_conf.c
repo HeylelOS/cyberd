@@ -598,7 +598,7 @@ daemon_conf_init(struct daemon_conf *conf) {
 	conf->uid = getuid();
 	conf->gid = getgid();
 
-	conf->umask = CONFIG_DEFAULT_UMASK;
+	conf->umask = CONFIG_DAEMONS_DEFAULT_UMASK;
 	conf->priority = 0;
 
 	conf->start.load = 0;

@@ -30,7 +30,7 @@ struct dispatcher_node_ipc {
 
 static void
 ipc_name_init(struct ipc_name *name) {
-	name->capacity = CONFIG_NAME_BUFFER_DEFAULT_CAPACITY;
+	name->capacity = CONFIG_CONNECTIONS_NAME_BUFFER_DEFAULT_CAPACITY;
 	name->length = 0;
 	name->value = malloc(name->capacity);
 }
@@ -87,7 +87,7 @@ dispatcher_node_create_endpoint(const char *name, perms_t perms) {
 		goto dispatcher_node_create_endpoint_err1;
 	}
 
-	if (listen(fd, CONFIG_CONNECTIONS_LIMIT) != 0) {
+	if (listen(fd, CONFIG_ENDPOINTS_CONNECTIONS) != 0) {
 		log_error("dispatcher_node_create_endpoint listen '%s': %m", name);
 		goto dispatcher_node_create_endpoint_err2;
 	}

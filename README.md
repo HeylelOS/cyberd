@@ -22,26 +22,27 @@ cyberd can:
 - Reload daemons, by sending a SIGHUP or a custom signal.
 - End daemons, by sending them a SIGKILL signal.
 - Poweroff, Halt, Reboot, Suspend kernel.
-- Create new IPC sockets with less or equal rights than the previous one.
+- Create custom connection endpoints.
 
 For further details, you can read the manual pages or even available tests for examples of simple daemons configurations.
 
 ## Build
 
-You should be able to configure and build it with:
+Meson is used to configure, build and install binaires and documentations:
 
 ```sh
-./configure
-make
+meson setup build
+meson compile -C build
+meson install -C build
 ```
 
 Note sometimes configure might fail because ld requires runtime components.
 You can easily solve this by setting the LD to the used compiler.
 The latest usually encapsulates linking well.
 
-## Tests
+The documentation is built through the `doc` target, if the required tools are available.
 
-You should be able to test the currently installed debug version by executing (just change your PATH to test another):
-
-	./test/cyberd/test.sh
+```sh
+meson compile -C build doc
+```
 

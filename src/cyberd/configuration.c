@@ -150,7 +150,8 @@ configuration_init(void) {
 	log_print("configuration_init");
 	tree_init(&daemons, &daemons_tree_class);
 
-	if ((dirp = opendir(CONFIG_DAEMONCONFS_DIRECTORY)) != NULL) {
+	dirp = opendir(CONFIG_CONFIGURATION_DIRECTORY);
+	if (dirp != NULL) {
 		struct dirent *entry;
 
 		while ((errno = 0, entry = readdir(dirp)) != NULL) {
@@ -189,7 +190,8 @@ configuration_reload(void) {
 	scheduler_empty();
 	tree_init(&daemons, &daemons_tree_class);
 
-	if ((dirp = opendir(CONFIG_DAEMONCONFS_DIRECTORY)) != NULL) {
+	dirp = opendir(CONFIG_CONFIGURATION_DIRECTORY);
+	if (dirp != NULL) {
 		struct dirent *entry;
 
 		while ((errno = 0, entry = readdir(dirp)) != NULL) {

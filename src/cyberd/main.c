@@ -5,8 +5,6 @@
 #include "signals.h"
 #include "log.h"
 
-#include "config.h"
-
 #include <stdlib.h>
 #include <stdbool.h>
 #include <unistd.h> /* sync */
@@ -47,7 +45,7 @@ static enum {
 static void
 begin(void) {
 
-	umask(CONFIG_DEFAULT_UMASK);
+	umask(022);
 
 #ifdef NDEBUG
 	if (getpid() != 1) {

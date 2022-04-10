@@ -74,14 +74,14 @@ dispatcher_init(void) {
 
 	if (mkdir(CONFIG_ENDPOINTS_DIRECTORY, S_IRWXU | S_IRWXG | S_IRWXO) == 0
 		|| errno == EEXIST) { /* If it already exists, we postpone the error if its not a directory */
-		struct dispatcher_node *endpoint = dispatcher_node_create_endpoint(CONFIG_ENDPOINT_ROOT, PERMS_ALL);
+		struct dispatcher_node *endpoint = dispatcher_node_create_endpoint(CONFIG_ENDPOINTS_ROOT, PERMS_ALL);
 
 		if (endpoint != NULL) {
 			if (!dispatcher_insert(endpoint)) {
 				dispatcher_node_destroy(endpoint);
 			}
 		} else {
-			log_error("dispatcher_init: Unable to create '"CONFIG_ENDPOINT_ROOT"' endpoint");
+			log_error("dispatcher_init: Unable to create '"CONFIG_ENDPOINTS_ROOT"' endpoint");
 		}
 	} else {
 		log_error("dispatcher_init: Unable to create controllers directory '"CONFIG_ENDPOINTS_DIRECTORY"': %m");
@@ -132,7 +132,7 @@ dispatcher_readset(void) {
 
 static void
 dispatcher_handle_ipc(struct dispatcher_node *ipc) {
-	char buffer[CONFIG_READ_BUFFER_SIZE];
+	char buffer[CONFIG_CONNECTIONS_READ_BUFFER_SIZE];
 	ssize_t readval = read(ipc->fd, buffer, sizeof (buffer));
 
 	if (readval > 0) {

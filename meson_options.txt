@@ -1,0 +1,1 @@
+option('runstatedir', type : 'string', value : '/var/run', description : 'Runstate data directory')
