@@ -1,29 +1,16 @@
+/* SPDX-License-Identifier: BSD-3-Clause */
 #ifndef LOG_H
 #define LOG_H
 
-/** Init logging if needed */
 void
-log_init(char *cyberdname);
+log_setup(char *progname);
 
-/** Closes logging if needed */
 void
-log_deinit(void);
+log_teardown(void);
 
-/** Restarts logging */
 void
-log_restart(void);
+log_info(const char *format, ...);
 
-/**
- * Prints in the log according to format
- * @param format Format to follow
- */
-void
-log_print(const char *format, ...);
-
-/**
- * Prints the message followed by an error message depending on errno
- * @param message Message to prefix
- */
 void
 log_error(const char *format, ...);
 

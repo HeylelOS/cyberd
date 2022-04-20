@@ -1,7 +1,9 @@
 # NAME
+
 cyberd - Cyberd init daemons configuration files
 
 # DESCRIPTION
+
 Cyberd daemons configurations file follow an INI-like syntax.
 
 They are separated into sections. Three sections are available: **general**, **environment** and **start**.

@@ -1,49 +1,56 @@
+/* SPDX-License-Identifier: BSD-3-Clause */
 #include "configuration.h"
-#include "dispatcher.h"
-#include "scheduler.h"
-#include "spawns.h"
+#include "socket_switch.h"
 #include "signals.h"
+#include "spawns.h"
 #include "log.h"
 
-#include <stdlib.h>
-#include <stdbool.h>
+/**
+ * @mainpage Cyberd init
+ * Cyberd is a modern init system for unix-like operating systems.
+ *
+ * It aims at keeping things simple by just being a process leader for daemons.
+ *
+ * You can define daemons with configuration files, and use socket endpoints to
+ * control aspects of their lifetime, such as starting, stopping, reloading or end them.
+ *
+ * Cyberd's init source code can be decomposed in three core components:
+ * - The configuration: Where daemons are loaded/reloaded and configuration parsed.
+ * - The socket switch: Where endpoints and connections are recorded and operated.
+ * - The signal handlers: Where "process events" are received. Such as: system termination, configuration reloading and child processes reaping.
+ *
+ * The process runs in one of two-states: Signal-handling and non signal-handling.
+ * Both modes have different signal masks to avoid spurious interruptions and potential collisions in data structures.
+ * When non signal-handling (cf the @ref main loop in `src/cyberd/main.c`), all signals are blocked or ignored.
+ * Only when the call to _pselect(2)_ is done, the signal masks changes and allows for handling of termination signals (_SIGTERM_, _SIGINT_ in debug),
+ * configuration reload signal (_SIGHUP_) and child processes reaping (_SIGCHLD_).
+ * Termination signals are not granted the _SA\_RESTART_ flag, so that the @ref main loop can detect a termination signal through an _EINTR_ _pselect(2)_ error.
+ */
+
+#include <stdlib.h> /* exit */
+#include <stdnoreturn.h> /* noreturn */
+#include <sys/reboot.h> /* reboot */
+#include <sys/stat.h> /* umask */
 #include <unistd.h> /* sync */
 #include <time.h> /* nanosleep */
-#include <sys/stat.h> /* umask */
-#include <sys/reboot.h> /* reboot */
-#include <dirent.h>
-#include <errno.h>
-#include <err.h>
+#include <errno.h> /* EINTR */
 
-#ifndef NORETURN
-#define NORETURN __attribute__((noreturn))
-#endif
-
-#ifdef RB_HALT_SYSTEM
-#define RB_HALT RB_HALT_SYSTEM
+#ifdef NDEBUG
+#include <sys/wait.h> /* waitpid */
+#include <signal.h> /* kill */
 #endif
 
 /**
- * The running boolean determines when the main loop shall end.
- * has visibility in the whole process
- */
-bool running;
-
-/**
- * The ending enum specifies what to do when we end.
- * Should we poweroff, halt, reboot?
- */
-static enum {
-	ENDING_POWEROFF,
-	ENDING_HALT,
-	ENDING_REBOOT
-} ending;
-
-/**
- * Initialize umask, check/purge init environnement
+ * Setup all core subsystems.
+ * Initialize umask to something common. Sanity check our pid and user id.
+ * Opens log subsystem with process name. Setup signal handlers. Create first endpoint.
+ * And finally, load our configuration.
+ * @param argc Arguments count.
+ * @param argv Arguments values.
+ * @param[out] sigmaskp Signal mask not blocked during _pselect(2)_.
  */
 static void
-begin(void) {
+setup(int argc, char **argv, sigset_t *sigmaskp) {
 
 	umask(022);
 
@@ -56,175 +63,99 @@ begin(void) {
 		errx(EXIT_FAILURE, "Must be run as root");
 	}
 #endif
+
+	log_setup(*argv);
+	signals_setup(sigmaskp);
+	socket_switch_setup();
+	configuration_load();
 }
 
 /**
- * Ending init, lot of cleanup, daemons timeout is 5 seconds,
- * Note some structures (scheduler) are not freed by default, because
- * they do not hold sensible system ressources, such as locks, files..
+ * Teardown system, synchronizes filesystems to persistent storage, daemons timeout is 5 seconds.
+ * Note some structures (configuration) may not be freed by default, because
+ * they do not hold sensible system resources, such as locks, files...
+ * @returns Never.
  */
-static void NORETURN
-end(void) {
+static void noreturn
+teardown(void) {
 	struct timespec req = {
 		.tv_sec = 5,
 		.tv_nsec = 0
 	}, rem;
 
-	log_print("ending");
+	log_info("ending");
 
 	/* Notify spawns they should stop */
 	spawns_stop();
-	/* Destroying dispatcher, to unlink endpoints */
-	dispatcher_deinit();
+	/* Destroying socket switch, to unlink endpoints */
+	socket_switch_teardown();
 	/* Modifying the signal mask so we accept SIGCHLD now */
 	signals_stopping();
 
 	/* While there are spawns, and we didn't time out, we wait spawns for 5 seconds.
-	 * In theory we set SA_RESTART for SIGCHLD, but the behaviour might not be
-	 * consistent upon implementations, so let's keep EINTR check. */
-	while (!spawns_empty() && nanosleep(&req, &rem) == -1 && errno == EINTR) {
+	 * In theory we sat SA_RESTART for SIGCHLD, but default signal behaviours might not be
+	 * consistent upon implementations, so let's keep EINTR checked. */
+	while (!spawns_empty() && nanosleep(&req, &rem) != 0 && errno == EINTR) {
 		req = rem;
 	}
 
-	/* If some children didn't exit, we re-block SIGCHLD
-	and SIGKILL/wait everyone else (the wait is meant to log them) */
-	if (!spawns_empty()) {
-		signals_ending();
-		spawns_end();
-	}
+	/* In case some processes didn't exit, we re-block SIGCHLD */
+	signals_ending();
+	/* And then SIGKILL and wait everyone left. */
+	spawns_end();
 
-#ifdef CONFIG_FULL_CLEANUP
-	scheduler_deinit();
-	configuration_deinit();
+#ifdef NDEBUG
+	/* In release, really everyone left. This way, we are ready for @ref _sync(2)_. */
+	kill(-1, SIGKILL);
+
+	pid_t pid;
+	while (pid = waitpid(-1, NULL, 0), pid > 0) {
+		log_info("Orphan process (pid: %d) force-ended", pid);
+	}
 #endif
 
-	/* log ending */
-	log_deinit();
+#ifdef CONFIG_MEMORY_CLEANUP
+	configuration_teardown();
+#endif
+
+	log_teardown();
 
 	/* Synchronize all filesystems to disk(s),
-	note: Standard specifies it may return before all syncs done */
+	 * note: Standard specifies it may return before all syncs done */
 	sync();
 
-	/* Nothing standard in the following part */
-	int howto;
-	switch (ending) {
-#ifdef RB_POWER_OFF
-	case ENDING_POWEROFF:
-		howto = RB_POWER_OFF;
-		break;
-#else
-#warning "Unsupported poweroff operation will not be available"
-#endif
-#ifdef RB_HALT
-	case ENDING_HALT:
-		howto = RB_HALT;
-		break;
-#else
-#warning "Unsupported halt operation will not be available"
-#endif
-	default: /* ENDING_REBOOT */
-		howto = RB_AUTOBOOT;
-		break;
-	}
-
-	reboot(howto);
+	reboot(signals_requested_reboot);
 	/* We reached an error */
 	exit(EXIT_FAILURE);
 }
 
 /**
- * System is supended if supported
+ * Main loop, initializes all subsystems, waits and operates socket switch while ensuring signal safety.
+ * @param argc Arguments count.
+ * @param argv Arguments values.
+ * @returns Never, as a returning init triggers a kernel panic.
  */
-static void
-suspend(void) {
-
-#ifdef RB_SW_SUSPEND
-	if (reboot(RB_SW_SUSPEND) == -1) {
-		log_error("reboot(RB_SW_SUSPEND): %m");
-	}
-#else
-#warning "Unsupported suspend operation will not be available"
-	log_error("Suspend not available on this operating system");
-#endif
-}
-
 int
-main(int argc,
-	char **argv) {
-	/* Environnement initialization, order matters */
-	begin();
-	log_init(*argv);
-	signals_init();
-	spawns_init();
-	scheduler_init();
-	dispatcher_init();
-	configuration_init();
-	running = true;
+main(int argc, char **argv) {
+	sigset_t sigmask;
 
-	log_print("running");
-	while (running) {
-		int fds;
-		fd_set *readfdsp, *writefdsp, *errorfdsp;
-		const struct timespec *timeoutp;
+	setup(argc, argv, &sigmask);
 
-		/* Fetch dispatcher indications */
-		fds = dispatcher_lastfd() + 1;
-		readfdsp = dispatcher_readset();
-		writefdsp = dispatcher_writeset();
-		errorfdsp = dispatcher_errorset();
+	log_info("running");
 
-		/* Fetch time before next action */
-		timeoutp = scheduler_next();
+	while (!signals_requested_reboot) {
+		fd_set *readfds, *writefds, *exceptfds;
+		int fds = socket_switch_prepare(&readfds, &writefds, &exceptfds);
 
-		/* Wait for action */
 		errno = 0;
-		fds = pselect(fds,
-			readfdsp, writefdsp, errorfdsp,
-			timeoutp,
-			signals_sigset());
+		fds = pselect(fds, readfds, writefds, exceptfds, NULL, &sigmask);
 
-		if (fds > 0) {
-			/* Fdset I/O */
-
-			dispatcher_handle(fds);
-		} else if (fds == 0) {
-			/* An event timed out */
-			struct scheduler_activity activity;
-
-			scheduler_dequeue(&activity);
-
-			switch (activity.action) {
-			case SCHEDULE_DAEMON_START:
-				daemon_start(activity.daemon);
-				break;
-			case SCHEDULE_DAEMON_STOP:
-				daemon_stop(activity.daemon);
-				break;
-			case SCHEDULE_DAEMON_RELOAD:
-				daemon_reload(activity.daemon);
-				break;
-			case SCHEDULE_DAEMON_END:
-				daemon_end(activity.daemon);
-				break;
-			default:
-				if (COMMAND_IS_SYSTEM(activity.action)) {
-					if (activity.action == SCHEDULE_SYSTEM_SUSPEND) {
-						suspend();
-					} else {
-						ending = activity.action - SCHEDULE_SYSTEM_POWEROFF;
-						running = false;
-					}
-				} else {
-					log_error("Unknown scheduled action received");
-				} break;
-			}
+		if (fds >= 0) {
+			socket_switch_operate(fds);
 		} else if (errno != EINTR) {
-			/* Error, signal not considered */
 			log_error("pselect: %m");
 		}
 	}
 
-	/* Clean up, and shutdown/reboot */
-	end();
+	teardown();
 }
-

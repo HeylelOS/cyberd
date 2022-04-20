@@ -1,234 +1,254 @@
+/* SPDX-License-Identifier: BSD-3-Clause */
 #include "configuration.h"
-#include "log.h"
+
+#include "daemon.h"
 #include "tree.h"
-#include "scheduler.h"
+#include "log.h"
 
 #include "config.h"
 
-#include <stdio.h>
-#include <string.h>
-#include <unistd.h>
-#include <dirent.h>
-#include <fcntl.h>
-#include <errno.h>
+#include <string.h> /* strcmp */
+#include <unistd.h> /* close */
+#include <dirent.h> /* opendir, ... */
+#include <fcntl.h> /* openat */
+#include <errno.h> /* errno */
 
+/*******************
+ * Daemons storage *
+ *******************/
+
+/**
+ * Daemon's tree comparison function. Identifies by the daemon's name.
+ * @param lhs Left hand side operand.
+ * @param rhs Right hand side operand.
+ * @returns The comparison between @p lhs and @p rhs names, see _strcmp(3)_.
+ */
 static int
-daemons_compare_function(const tree_element_t *lhs, const tree_element_t *rhs);
-
-static hash_t
-daemons_hash_function(const tree_element_t *element);
-
-/* Main storage for daemons */
-static struct tree daemons;
-
-static const struct tree_class daemons_tree_class = {
-	.compare_function = daemons_compare_function,
-	.hash_function = daemons_hash_function,
-};
-
-static int
-daemons_compare_function(const tree_element_t *lhs, const tree_element_t *rhs) {
-	const struct daemon *ldaemon = lhs, *rdaemon = rhs;
+daemons_compare(const tree_element_t *lhs, const tree_element_t *rhs) {
+	const struct daemon * const ldaemon = lhs, * const rdaemon = rhs;
 
 	return strcmp(ldaemon->name, rdaemon->name);
 }
 
-static hash_t
-daemons_hash_function(const tree_element_t *element) {
-	const struct daemon *daemon = element;
+/**
+ * Main daemon storage, where all daemon's structure are allocated/freed.
+ * This storage is index using the daemon's names as identifiers.
+ * Daemons stored in `src/cyberd/spawns.c` come from here and are thus bound to this tree's storage lifetime.
+ */
+static struct tree daemons = { .compare = daemons_compare };
 
-	return daemon->namehash;
+/**
+ * Helper function to remove a daemon according to its name.
+ * @param daemons Tree using @ref daemons_compare as a comparison function.
+ * @param name Name of the daemon to remove.
+ * @returns Tree node holding the daemon associated with @p name, or _NULL_ if not found.
+ */
+static struct daemon *
+daemons_remove_element(struct tree *daemons, const char *name) {
+	const struct daemon element = { .name = (char *)name }; /* Cast is safe as daemons_compare doesn't modify name */
+
+	return tree_remove(daemons, &element);
 }
 
-static struct tree_node *
-daemons_remove_by_name(struct tree *daemons, const char *name, hash_t hash) {
-	struct tree_node *removed = tree_remove_by_hash(daemons, hash);
-	struct tree_node *node = removed;
-
-	if (removed != NULL) {
-		struct daemon *daemon = node->element;
-
-		if (strcmp(daemon->name, name) != 0) {
-			node = daemons_remove_by_name(daemons, name, hash);
-			tree_insert(daemons, removed);
-		}
-	}
-
-	return node;
-}
-
+/**
+ * Destroy a daemon element.
+ * We could directly cast daemon_destroy, but I prefer to avoid such hacks when it comes to function pointers.
+ * @param element Daemon.
+ */
 static void
-daemons_preorder_cleanup(struct tree_node *node) {
-
-	if (node != NULL) {
-		struct daemon *daemon = node->element;
-
-		daemon_destroy(daemon);
-
-		daemons_preorder_cleanup(node->left);
-		daemons_preorder_cleanup(node->right);
-	}
+daemons_destroy_element(tree_element_t *element) {
+	daemon_destroy(element);
 }
 
+/**
+ * This function finds the daemon named @p name.
+ * @param name Daemon's identifier.
+ * @returns The associated daemon, or NULL if not found.
+ */
+struct daemon *
+configuration_find(const char *name) {
+	const struct daemon element = { .name = (char *)name }; /* Cast is safe as daemons_compare doesn't modify name */
+
+	return tree_find(&daemons, &element);
+}
+
+/*****************************************
+ * Daemons configuration loading helpers *
+ *****************************************/
+
+/**
+ * Load a new daemon's configuration.
+ * This function is called during @ref configuration_load and may start daemons,
+ * which requires all other subsystems to already be available.
+ * @param name Name of the daemon.
+ * @param filep Opened configuration file.
+ */
 static void
 configuration_daemons_load(const char *name, FILE *filep) {
-	struct daemon *daemon = daemon_create(name);
+	struct daemon * const daemon = daemon_create(name);
 
 	if (daemon != NULL) {
-		if (daemon_conf_parse(&daemon->conf, filep)) {
-			struct tree_node *node = tree_node_create(daemon);
+		if (daemon_conf_parse(&daemon->conf, filep) == 0) {
+			tree_insert(&daemons, daemon);
 
-			if (node != NULL) {
-				tree_insert(&daemons, node);
+			log_info("'%s' loaded", daemon->name);
 
-				log_print("'%s' loaded", daemon->name);
-
-				if (daemon->conf.start.load == 1) {
-					daemon_start(daemon);
-				}
-			}
-		} else {
-			daemon_destroy(daemon);
-		}
-	}
-}
-
-static void
-configuration_daemons_reload(const char *name, FILE *filep, struct tree *olddaemons) {
-	struct tree_node *node
-		= daemons_remove_by_name(olddaemons, name, hash_string(name));
-
-	if (node == NULL) {
-		/* New daemon */
-		configuration_daemons_load(name, filep);
-	} else {
-		/* Reloading existing daemon */
-		struct daemon *daemon = node->element;
-
-		daemon_conf_deinit(&daemon->conf);
-		daemon_conf_init(&daemon->conf);
-
-		if (daemon_conf_parse(&daemon->conf, filep)) {
-
-			tree_insert(&daemons, node);
-
-			log_print("'%s' reloaded", daemon->name);
-
-			if (daemon->conf.start.reload == 1) {
+			if (daemon->conf.start.load) {
 				daemon_start(daemon);
 			}
 		} else {
-			log_error("configuration_reload: Couldn't reload '%s'", daemon->name);
-
 			daemon_destroy(daemon);
-			tree_node_destroy(node);
 		}
 	}
 }
 
+/**
+ * Load a new daemon's configuration, or reload it if already existing.
+ * @param name Name of the daemon.
+ * @param filep Opened configuration file.
+ * @param olddaemons Old daemons tree, where previous daemons are stored.
+ */
+static void
+configuration_daemons_reload(const char *name, FILE *filep, struct tree *olddaemons) {
+	struct daemon * const daemon = daemons_remove_element(olddaemons, name);
+
+	if (daemon != NULL) {
+		/* Reloading existing daemon */
+		struct daemon_conf newconf;
+
+		daemon_conf_init(&newconf);
+
+		if (daemon_conf_parse(&newconf, filep) == 0) {
+
+			daemon_conf_deinit(&daemon->conf);
+			daemon->conf = newconf;
+
+			log_info("'%s' reloaded", daemon->name);
+
+			if (daemon->conf.start.reload) {
+				daemon_start(daemon);
+			}
+		} else {
+			daemon_conf_deinit(&newconf);
+			log_error("Unable to reload '%s'", daemon->name);
+		}
+
+		tree_insert(&daemons, daemon);
+	} else {
+		/* New daemon */
+		configuration_daemons_load(name, filep);
+	}
+}
+
+/**
+ * Helper to open a file from a directory
+ * @param dirfd Directory file descriptor.
+ * @param path Path to the file, from @p dirfd.
+ * @returns A valid stream on success, _NULL_ else.
+ */
 static FILE *
 configuration_fopenat(int dirfd, const char *path) {
-	int fd = openat(dirfd, path, O_RDONLY);
-	FILE *filep = NULL;
+	const int fd = openat(dirfd, path, O_RDONLY);
+	FILE *filep;
 
 	if (fd >= 0) {
-		if ((filep = fdopen(fd, "r")) == NULL) {
+		filep = fdopen(fd, "r");
+		if (filep == NULL) {
 			close(fd);
 			log_error("configuration fdopen '%s': %m", path);
 		}
 	} else {
 		log_error("configuration openat '%s': %m", path);
+		filep = NULL;
 	}
 
 	return filep;
 }
 
+/**
+ * Load initial configuration. Called on @ref setup.
+ * This function may start daemons, and suppose all subsystems have been initialized.
+ */
 void
-configuration_init(void) {
+configuration_load(void) {
 	DIR *dirp;
 
-	log_print("configuration_init");
-	tree_init(&daemons, &daemons_tree_class);
+	log_info("configuration_init");
 
 	dirp = opendir(CONFIG_CONFIGURATION_DIRECTORY);
 	if (dirp != NULL) {
 		struct dirent *entry;
 
-		while ((errno = 0, entry = readdir(dirp)) != NULL) {
-			FILE *filep;
+		while (errno = 0, entry = readdir(dirp), entry != NULL) {
+			if (*entry->d_name != '.') {
+				FILE * const filep = configuration_fopenat(dirfd(dirp), entry->d_name);
 
-			if (entry->d_type == DT_REG && *entry->d_name != '.'
-				&& (filep = configuration_fopenat(dirfd(dirp), entry->d_name)) != NULL) {
-
-				configuration_daemons_load(entry->d_name, filep);
+				if (filep != NULL) {
+					configuration_daemons_load(entry->d_name, filep);
+					fclose(filep);
+				}
 			}
 		}
 
 		if (errno != 0) {
-			log_error("configuration_init readdir: %m");
+			log_error("configuration_load readdir: %m");
 		}
+
+		closedir(dirp);
 	} else {
-		log_error("configuration_init opendir: %m");
+		log_error("configuration_load opendir '"CONFIG_CONFIGURATION_DIRECTORY"': %m");
 	}
 }
 
-#ifdef CONFIG_FULL_CLEANUP
-void
-configuration_deinit(void) {
-
-	daemons_preorder_cleanup(daemons.root);
-	tree_deinit(&daemons);
-}
-#endif
-
+/**
+ * Reload configurations, and load new ones if available.
+ * This function is called in @ref sighup_handler, and must not be interrupted.
+ */
 void
 configuration_reload(void) {
 	struct tree olddaemons = daemons;
 	DIR *dirp;
 
-	log_print("configuration_reload");
-	scheduler_empty();
-	tree_init(&daemons, &daemons_tree_class);
+	log_info("configuration_reload");
+
+	daemons.root = NULL;
 
 	dirp = opendir(CONFIG_CONFIGURATION_DIRECTORY);
 	if (dirp != NULL) {
 		struct dirent *entry;
 
-		while ((errno = 0, entry = readdir(dirp)) != NULL) {
-			FILE *filep;
+		while (errno = 0, entry = readdir(dirp), entry != NULL) {
+			if (*entry->d_name != '.') {
+				FILE * const filep = configuration_fopenat(dirfd(dirp), entry->d_name);
 
-			if (entry->d_type == DT_REG && *entry->d_name != '.'
-				&& (filep = configuration_fopenat(dirfd(dirp), entry->d_name)) != NULL) {
-
-				configuration_daemons_reload(entry->d_name, filep, &olddaemons);
+				if (filep != NULL) {
+					configuration_daemons_reload(entry->d_name, filep, &olddaemons);
+					fclose(filep);
+				}
 			}
 		}
 
 		if (errno != 0) {
 			log_error("configuration_reload readdir: %m");
 		}
+
+		closedir(dirp);
 	} else {
 		log_error("configuration_reload opendir: %m");
 	}
 
-	daemons_preorder_cleanup(olddaemons.root);
+	tree_mutate(&olddaemons, daemons_destroy_element);
 	tree_deinit(&olddaemons);
 }
 
-struct daemon *
-configuration_daemon_find(const char *name) {
-	struct tree_node *node = daemons_remove_by_name(&daemons, name, hash_string(name));
-
-	/* Removing the daemon is a bit far fetched, but we already have a function for this,
-	   avoids creating a whole "find by field" function for the tree, or even a hash table */
-	if (node != NULL) {
-		struct daemon *daemon = node->element;
-
-		tree_insert(&daemons, node);
-
-		return daemon;
-	} else {
-		return NULL;
-	}
+#ifdef CONFIG_MEMORY_CLEANUP
+/**
+ * Frees all configuration data. Not used in release mode because it
+ * only frees memory, which is not anymore a sensible resource at this point.
+ */
+void
+configuration_teardown(void) {
+	tree_mutate(&daemons, daemons_destroy_element);
+	tree_deinit(&daemons);
 }
-
+#endif
