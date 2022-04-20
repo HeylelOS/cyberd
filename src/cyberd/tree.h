@@ -1,97 +1,63 @@
+/* SPDX-License-Identifier: BSD-3-Clause */
 #ifndef TREE_H
 #define TREE_H
 
-#include "hash.h"
-
-/*
- * tree.h is a generic AVL Tree
- * which contains an anonymous pointer,
- * for logn access according to
- * a field determined by a function
- */
-
-/** Alias to what it holds, just to avoid void * for code clarity */
+/** Tree element. */
 typedef void tree_element_t;
 
-/** Tree class, supporting dynamic methods */
-struct tree_class {
-	int    (*compare_function)(const tree_element_t *, const tree_element_t *);
-	hash_t (*hash_function)(const tree_element_t *);
-};
+/** Tree node. */
+struct tree_node;
 
-/** Node in the tree */
-struct tree_node {
-	tree_element_t *element;
-
-	struct tree_node *left, *right;
-	int height;
-};
-
-/** The tree, with hash field accessor */
+/** Balanced sorted binary tree, implemented as an AVL. */
 struct tree {
-	const struct tree_class *class;
-	struct tree_node *root;
+	int (* const compare)(const tree_element_t *, const tree_element_t *); /**< Function used to compare nodes' elements. */
+	struct tree_node *root; /**< Root node. */
 };
 
 /**
- * Creates a new node to hold element
- * @param element Element hold by the node
- * @return Newly allocated node, must be tree_node_destroy()'d
+ * Deinitialize and free a tree's memory.
+ * @param tree Tree to deinitialize.
  */
-struct tree_node *
-tree_node_create(tree_element_t *element);
+static inline void
+tree_deinit(struct tree *tree) {
+	extern void tree_node_destroy(struct tree_node *node);
+
+	tree_node_destroy(tree->root);
+}
 
 /**
- * Destroys a previously tree_node_create()'d node
- * @param node Node to destroy
+ * Execute a traversal of the tree to mutate elements.
+ * @param tree Tree to mutate.
+ * @param mutate Mutation callback.
  */
-void
-tree_node_destroy(struct tree_node *node);
+static inline void
+tree_mutate(struct tree *tree, void (* const mutate)(tree_element_t *element)) {
+	extern void tree_node_preorder_mutate(struct tree_node *node, void (* const mutate)(tree_element_t *element));
+
+	tree_node_preorder_mutate(tree->root, mutate);
+}
 
 /**
- * Initialize tree structure
- * @param tree Pointer to the structure to initialize
- * @param class Class associated to this tree
+ * Insert a new node in a tree.
+ * @param tree Tree to insert in.
+ * @param node Node to insert.
  */
-void
-tree_init(struct tree *tree,
-	const struct tree_class *class);
+static inline void
+tree_insert(struct tree *tree, tree_element_t *element) {
+	extern struct tree_node * tree_node_create(tree_element_t *element);
+	extern void tree_node_insert(struct tree_node **rootp, struct tree_node *node, int (* const compare)(const tree_element_t *, const tree_element_t *));
 
-/**
- * Frees informations of a tree
- * @param tree Tree to deinitialize
- */
-void
-tree_deinit(struct tree *tree);
+	tree_node_insert(&tree->root, tree_node_create(element), tree->compare);
+}
 
-/**
- * Insert a node in the tree
- * @param tree Tree in which to insert
- * @param node Node to insert
- */
-void
-tree_insert(struct tree *tree,
-	struct tree_node *node);
-
-/**
- * Remove a node from the tree
- * @param tree Tree to remove from
- * @param hash Hash of the (maybe) designated node
- * @return NULL if not found, or the node else, removed from tree
- */
-struct tree_node *
-tree_remove_by_hash(struct tree *tree,
-	hash_t hash);
-
-/**
- * Find a node by its hash
- * @param tree Tree to find in
- * @param hash Hash of the (maybe) designated node
- * @return NULL if not found, or the element else
- */
 tree_element_t *
-tree_find_by_hash(struct tree *tree,
-	hash_t hash);
+tree_remove(struct tree *tree, const tree_element_t *element);
+
+tree_element_t *
+tree_find(struct tree *tree, const tree_element_t *element);
+
+tree_element_t *
+tree_last(struct tree *tree);
 
 /* TREE_H */
 #endif

@@ -1,237 +1,266 @@
+/* SPDX-License-Identifier: BSD-3-Clause */
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
-#include <string.h>
+#include <stdnoreturn.h>
+#include <arpa/inet.h>
 #include <unistd.h>
-#include <time.h>
-#include <err.h>
-
+#include <libgen.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <err.h>
+
+#include "capabilities.h"
 
 #include "config.h"
-#include "commands.h"
-#include "perms.h"
 
-struct cyberctl_args {
-	const char *endpoint;
-	int64_t when;
+#ifndef __has_builtin
+#error "Builtin macro __has_builtin is not available"
+#endif
+
+#if !__has_builtin(__builtin_ctz)
+#error "Builtin __builtin_ctz is not available"
+#endif
+
+#if !__has_c_attribute(gnu::packed)
+#error "Attribute gnu::packed is not available"
+#endif
+
+#define COMMAND(command) __builtin_ctz(CAPABILITY_##command)
+
+enum synopsis {
+	SYNOPSIS_HALT,
+	SYNOPSIS_REBOOT,
+	SYNOPSIS_SUSPEND,
+	SYNOPSIS_POWEROFF,
+	SYNOPSIS_SHUTDOWN,
+	SYNOPSIS_INITCTL,
 };
 
-struct command_identifier {
-	int id;
-	char *name;
-} const commands[] = {
-	{ .id = COMMAND_CREATE_ENDPOINT, .name = "create-endpoint" },
-	{ .id = COMMAND_DAEMON_START, .name = "start" },
-	{ .id = COMMAND_DAEMON_STOP, .name = "stop" },
-	{ .id = COMMAND_DAEMON_RELOAD, .name = "reload" },
-	{ .id = COMMAND_DAEMON_END, .name = "end" },
-	{ .id = COMMAND_SYSTEM_POWEROFF, .name = "poweroff" },
-	{ .id = COMMAND_SYSTEM_HALT, .name = "halt" },
-	{ .id = COMMAND_SYSTEM_REBOOT, .name = "reboot" },
-	{ .id = COMMAND_SYSTEM_SUSPEND, .name = "suspend" },
-};
+static uint8_t
+initctl_command_id(const char *command) {
+	const char * const commands[] = {
+		[COMMAND(ENDPOINT_CREATE)] = "create-endpoint",
+		[COMMAND(DAEMON_START)] = "start",
+		[COMMAND(DAEMON_STOP)] = "stop",
+		[COMMAND(DAEMON_RELOAD)] = "reload",
+		[COMMAND(DAEMON_END)] = "end",
+		[COMMAND(SYSTEM_POWEROFF)] = "poweroff",
+		[COMMAND(SYSTEM_HALT)] = "halt",
+		[COMMAND(SYSTEM_REBOOT)] = "reboot",
+		[COMMAND(SYSTEM_SUSPEND)] = "suspend",
+	};
+	uint8_t id = 0;
 
-static int
-cyberctl_command_find_id(const char *name) {
-	const struct command_identifier *current = commands,
-		* const end = commands + sizeof (commands) / sizeof (*commands);
-
-	while (current != end && strcmp(current->name, name) != 0) {
-		current++;
+	while (id < sizeof (commands) / sizeof (*commands) && strcmp(commands[id], command) != 0) {
+		id++;
 	}
 
-	return current != end ? current->id : COMMAND_UNDEFINED;
+	return id;
 }
 
 static int
-cyberctl_endpoint_open(const char *name) {
-	int fd = socket(AF_LOCAL, SOCK_STREAM, 0);
+initctl_open(const char *endpoint) {
+	const int fd = socket(AF_LOCAL, SOCK_STREAM, 0);
+	struct sockaddr_un addr = { .sun_family = AF_LOCAL };
 
-	if (fd != -1) {
-		struct sockaddr_un addr = { .sun_family = AF_LOCAL };
+	if (fd < 0) {
+		err(EXIT_FAILURE, "Unable to create socket for endpoint '%s'", endpoint);
+	}
 
-		if (snprintf(addr.sun_path, sizeof (addr.sun_path),
-			CONFIG_ENDPOINTS_DIRECTORY"/%s", name) >= sizeof (addr.sun_path)) {
-			errx(EXIT_FAILURE, "Socket pathname too long");
-		}
+	if (snprintf(addr.sun_path, sizeof (addr.sun_path), CONFIG_ENDPOINTS_DIRECTORY"/%s", endpoint) >= sizeof (addr.sun_path)) {
+		errx(EXIT_FAILURE, "Endpoint name '%s' is too long", endpoint);
+	}
 
-		if (connect(fd, (const struct sockaddr *)&addr, sizeof (addr)) != 0) {
-			err(EXIT_FAILURE, "connect %s", addr.sun_path);
-		}
-	} else {
-		err(EXIT_FAILURE, "socket %s", name);
+	if (connect(fd, (const struct sockaddr *)&addr, sizeof (addr)) != 0) {
+		err(EXIT_FAILURE, "Unable to connect to endpoint '%s'", endpoint);
 	}
 
 	return fd;
 }
 
-static void
-cyberctl_endpoint_close(int fd) {
-	shutdown(fd, SHUT_RDWR);
-	close(fd);
+static void noreturn
+initctl_endpoint_create(const char *endpoint, uint8_t id, capset_t restricted, const char *name) {
+	struct [[gnu::packed]] {
+		uint8_t id;
+		uint32_t restricted;
+		char name[];
+	} *message;
+	const size_t namelen = strlen(name);
+	const size_t messagesize = sizeof (*message) + namelen + 1;
+	const int fd = initctl_open(endpoint);
+
+	message = alloca(messagesize);
+	message->id = id;
+	message->restricted = htonl(restricted);
+	memcpy(message->name, name, namelen + 1);
+
+	if (write(fd, message, messagesize) != messagesize) {
+		err(EXIT_FAILURE, "Unable to write to endpoint");
+	}
+
+	exit(EXIT_SUCCESS);
 }
 
-static int
-cyberctl_create_endpoint(int fd, uint8_t id, char **argpos, char **argend) {
-	if (argpos == argend) {
-		warnx("Missing argument for create-endpoint command");
-		return EXIT_FAILURE;
+static void noreturn
+initctl_daemon(const char *endpoint, uint8_t id, const char *name) {
+	struct [[gnu::packed]] {
+		uint8_t id;
+		char name[];
+	} *message;
+	const size_t namelen = strlen(name);
+	const size_t messagesize = sizeof (*message) + namelen + 1;
+	const int fd = initctl_open(endpoint);
+
+	message = alloca(messagesize);
+	message->id = id;
+	memcpy(message->name, name, namelen + 1);
+
+	if (write(fd, message, messagesize) != messagesize) {
+		err(EXIT_FAILURE, "Unable to write to endpoint");
 	}
 
-	const char *newendpoint = *argpos;
-	size_t newendpointlen = strlen(newendpoint);
-	uint8_t buffer[sizeof (uint8_t) + sizeof (uint64_t) + newendpointlen + 1];
-	perms_t *permsp = (perms_t *)(buffer + 1);
-	char *name = (char *)(permsp + 1);
-
-	buffer[0] = id;
-
-	while (++argpos != argend) {
-		*permsp |= cyberctl_command_find_id(*argpos);
-	}
-
-	*permsp = htonll(*permsp);
-
-	memcpy(name, newendpoint, newendpointlen + 1);
-
-	if (write(fd, buffer, sizeof (buffer)) != sizeof (buffer)) {
-		warn("cyberctl_create_endpoint: write");
-		return EXIT_FAILURE;
-	}
-
-	return EXIT_SUCCESS;
+	exit(EXIT_SUCCESS);
 }
 
-static int
-cyberctl_daemon(int fd, uint8_t id, char **argpos, char **argend, const struct cyberctl_args *args) {
-	if (argpos == argend) {
-		warnx("Missing arguments for daemon command");
-		return EXIT_FAILURE;
+static void noreturn
+initctl_system(const char *endpoint, uint8_t id) {
+	const int fd = initctl_open(endpoint);
+
+	if (write(fd, &id, sizeof (id)) != sizeof (id)) {
+		err(EXIT_FAILURE, "Unable to write to endpoint");
 	}
 
-	while (argpos != argend) {
-		char *daemon = *argpos;
-		size_t daemonlen = strlen(daemon);
-		uint8_t buffer[sizeof (uint8_t) + sizeof (uint64_t) + daemonlen + 1];
-		uint64_t *whenp = (uint64_t *)(buffer + 1);
-		char *name = (char *)(whenp + 1);
+	exit(EXIT_SUCCESS);
+}
 
-		buffer[0] = id;
-		*whenp = htonll((uint64_t)args->when);
-		memcpy(name, daemon, daemonlen + 1);
+static void noreturn
+shutdown_main(int argc, char **argv) {
+	uint8_t id = COMMAND(SYSTEM_POWEROFF);
+	int c;
 
-		if (write(fd, buffer, sizeof (buffer)) != sizeof (buffer)) {
-			warn("cyberctl_daemon: write");
-			return EXIT_FAILURE;
+	while (c = getopt(argc, argv, ":HPr"), c != -1) {
+		switch (c) {
+		case 'H': id = COMMAND(SYSTEM_HALT);     break;
+		case 'P': id = COMMAND(SYSTEM_POWEROFF); break;
+		case 'r': id = COMMAND(SYSTEM_REBOOT);   break;
+		case ':':
+			warnx("Option -%c requires an operand\n", optopt);
+			exit(EXIT_FAILURE);
+		case '?':
+			warnx("Unrecognized option -%c\n", optopt);
+			exit(EXIT_FAILURE);
 		}
-
-		argpos++;
 	}
 
-	return EXIT_SUCCESS;
+	initctl_system(CONFIG_ENDPOINTS_ROOT, id);
 }
 
-static int
-cyberctl_system(int fd, uint8_t id, char **argpos, char **argend, const struct cyberctl_args *args) {
-	if (argpos != argend) {
-		warnx("Invalid arguments for system command");
-		return EXIT_FAILURE;
-	}
-
-	uint8_t buffer[sizeof (uint8_t) + sizeof (uint64_t)];
-	uint64_t *whenp = (uint64_t *)(buffer + 1);
-
-	buffer[0] = id;
-	*whenp = htonll((uint64_t)args->when);
-
-	if (write(fd, buffer, sizeof (buffer)) != sizeof (buffer)) {
-		warn("cyberctl_system: write");
-		return EXIT_FAILURE;
-	}
-
-	return EXIT_SUCCESS;
-}
-
-static void
-cyberctl_usage(const char *cyberctlname) {
-	fprintf(stderr, "usage: %s [-s endpoint] [-E] [-t when] <start|stop|reload|end> daemon...\n"
-		"       %s [-s endpoint] [-E] [-t when] <poweroff|halt|reboot|suspend>\n"
-		"       %s [-s endpoint] <create-endpoint> [start|stop|reload|end|poweroff|halt|reboot|suspend|create-endpoint]...\n",
-		cyberctlname, cyberctlname, cyberctlname);
+static void noreturn
+initctl_usage(const char *progname) {
+	fprintf(stderr, "usage: %s [-c <endpoint>] <command>\n", progname);
 	exit(EXIT_FAILURE);
 }
 
-static struct cyberctl_args
-cyberctl_parse_args(int argc, char **argv) {
-	struct cyberctl_args args = {
-		.endpoint = CONFIG_ENDPOINTS_ROOT,
-		.when = 0,
-	};
-	bool epoch = false;
+static void noreturn
+initctl_main(int argc, char **argv) {
+	const char *endpoint = CONFIG_ENDPOINTS_ROOT;
+	uint8_t id;
 	int c;
 
-	while ((c = getopt(argc, argv, ":s:t:E")) != -1) {
+	while (c = getopt(argc, argv, ":c:"), c != -1) {
 		switch (c) {
-		case 's':
-			args.endpoint = optarg;
+		case 'c':
+			endpoint = optarg;
 			break;
-		case 't': {
-			char *end;
-			long value = strtol(optarg, &end, 10);
-
-			if (*end == '\0' && *optarg != '\0') {
-				args.when = (time_t) value;
-			} else {
-				warnx("Expected integral value for -%c, found '%s' (stopped at '%c')", optopt, optarg, *end);
-				cyberctl_usage(*argv);
-			}
-		} break;
-		case 'E':
-			epoch = true;
-			break;
-		case '?':
-			warnx("Invalid option -%c", optopt);
-			cyberctl_usage(*argv);
 		case ':':
-			warnx("Missing option argument after -%c", optopt);
-			cyberctl_usage(*argv);
+			warnx("Option -%c requires an operand", optopt);
+			initctl_usage(*argv);
+		case '?':
+			warnx("Unrecognized option -%c", optopt);
+			initctl_usage(*argv);
 		}
 	}
 
-	if (!epoch) {
-		args.when += time(NULL);
-	}
-
 	if (optind == argc) {
-		warnx("Missing command name");
-		cyberctl_usage(*argv);
+		warnx("Missing command");
+		initctl_usage(*argv);
 	}
 
-	return args;
+	id = initctl_command_id(argv[optind]);
+
+	if (id == COMMAND(ENDPOINT_CREATE)) {
+		capset_t kept = 0;
+
+		if (argc - optind < 3) {
+			warnx("Missing arguments for endpoint creation");
+			initctl_usage(*argv);
+		}
+
+		for (unsigned int i = optind + 1; i < argc; i++) {
+			const char * const command = argv[i];
+			const capset_t capability = 1 << initctl_command_id(command);
+
+			if ((capability & CAPSET_ALL) == 0) {
+				warnx("Invalid kept command command '%s'", command);
+				initctl_usage(*argv);
+			}
+
+			kept |= capability;
+		}
+
+		initctl_endpoint_create(endpoint, id, kept ^ CAPSET_ALL, argv[optind + 1]);
+	}
+
+	if (id <= COMMAND(DAEMON_END)) {
+
+		if (argc - optind != 2) {
+			warnx("Unexpected arguments for daemon command");
+			initctl_usage(*argv);
+		}
+
+		initctl_daemon(endpoint, id, argv[optind + 1]);
+	}
+
+	if (id <= COMMAND(SYSTEM_SUSPEND)) {
+
+		if (argc - optind != 1) {
+			warnx("Unexpected arguments for system command");
+			initctl_usage(*argv);
+		}
+
+		initctl_system(endpoint, id);
+	}
+
+	warnx("Invalid command '%s'", argv[optind]);
+	initctl_usage(*argv);
 }
 
 int
 main(int argc, char **argv) {
-	const struct cyberctl_args args = cyberctl_parse_args(argc, argv);
-	char **argpos = argv + optind, ** const argend = argv + argc;
-	int fd = cyberctl_endpoint_open(args.endpoint);
-	int id = cyberctl_command_find_id(*argpos);
-	int retval = EXIT_FAILURE;
+	static const char * const synopses[] = {
+		[SYNOPSIS_HALT]     = "halt",
+		[SYNOPSIS_REBOOT]   = "reboot",
+		[SYNOPSIS_SUSPEND]  = "suspend",
+		[SYNOPSIS_POWEROFF] = "poweroff",
+		[SYNOPSIS_SHUTDOWN] = "shutdown",
+	};
+	enum synopsis synopsis = 0;
+	uint8_t id;
 
-	if (id == COMMAND_CREATE_ENDPOINT) {
-		retval = cyberctl_create_endpoint(fd, id, argpos + 1, argend);
-	} else if (COMMAND_IS_DAEMON(id)) {
-		retval = cyberctl_daemon(fd, id, argpos + 1, argend, &args);
-	} else if (COMMAND_IS_SYSTEM(id)) {
-		retval = cyberctl_system(fd, id, argpos + 1, argend, &args);
-	} else {
-		warnx("Invalid command name: %s", *argpos);
+	*argv = basename(*argv);
+	while (synopsis < sizeof (synopses) / sizeof (*synopses) && strcmp(*argv, synopses[synopsis]) != 0) {
+		synopsis++;
 	}
 
-	cyberctl_endpoint_close(fd);
+	switch (synopsis) {
+	case SYNOPSIS_HALT:     id = COMMAND(SYSTEM_HALT);     break;
+	case SYNOPSIS_REBOOT:   id = COMMAND(SYSTEM_REBOOT);   break;
+	case SYNOPSIS_SUSPEND:  id = COMMAND(SYSTEM_SUSPEND);  break;
+	case SYNOPSIS_POWEROFF: id = COMMAND(SYSTEM_POWEROFF); break;
+	case SYNOPSIS_SHUTDOWN: shutdown_main(argc, argv);
+	case SYNOPSIS_INITCTL:  initctl_main(argc, argv);
+	default: abort();
+	}
 
-	return retval;
+	initctl_system(CONFIG_ENDPOINTS_ROOT, id);
 }
-

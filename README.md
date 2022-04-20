@@ -45,4 +45,3 @@ The documentation is built through the `doc` target, if the required tools are a
 ```sh
 meson compile -C build doc
 ```
-
