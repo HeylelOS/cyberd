@@ -7,7 +7,7 @@
 struct socket_node;
 
 void
-socket_switch_setup(void);
+socket_switch_setup(const char *path, const char *root);
 
 void
 socket_switch_teardown(void);

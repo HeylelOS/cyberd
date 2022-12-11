@@ -11,8 +11,6 @@
 
 #include "capabilities.h"
 
-#include "config.h"
-
 #ifndef __has_builtin
 #error "Builtin macro __has_builtin is not available"
 #endif
@@ -67,7 +65,7 @@ initctl_open(const char *endpoint) {
 		err(EXIT_FAILURE, "Unable to create socket for endpoint '%s'", endpoint);
 	}
 
-	if (snprintf(addr.sun_path, sizeof (addr.sun_path), CONFIG_ENDPOINTS_DIRECTORY"/%s", endpoint) >= sizeof (addr.sun_path)) {
+	if (snprintf(addr.sun_path, sizeof (addr.sun_path), CONFIG_SOCKET_ENDPOINTS_PATH"/%s", endpoint) >= sizeof (addr.sun_path)) {
 		errx(EXIT_FAILURE, "Endpoint name '%s' is too long", endpoint);
 	}
 
@@ -152,7 +150,7 @@ shutdown_main(int argc, char **argv) {
 		}
 	}
 
-	initctl_system(CONFIG_ENDPOINTS_ROOT, id);
+	initctl_system(CONFIG_SOCKET_ENDPOINTS_ROOT, id);
 }
 
 static void noreturn
@@ -163,7 +161,7 @@ initctl_usage(const char *progname) {
 
 static void noreturn
 initctl_main(int argc, char **argv) {
-	const char *endpoint = CONFIG_ENDPOINTS_ROOT;
+	const char *endpoint = CONFIG_SOCKET_ENDPOINTS_ROOT;
 	uint8_t id;
 	int c;
 
@@ -262,5 +260,5 @@ main(int argc, char **argv) {
 	default: abort();
 	}
 
-	initctl_system(CONFIG_ENDPOINTS_ROOT, id);
+	initctl_system(CONFIG_SOCKET_ENDPOINTS_ROOT, id);
 }

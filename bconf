@@ -1,0 +1,51 @@
+config RC_PATH
+	"Run commands executable path (optional)"
+	defaults "$(sysconfdir)/rc"
+
+config CONFIGURATION_PATH
+	"Daemon configuration files directory path"
+	defaults "$(sysconfdir)/daemons"
+
+config DAEMON_DEFAULT_WORKDIR
+	"Daemons default working directory"
+	defaults "/"
+
+config DAEMON_DEV_NULL
+	"Path of the /dev/null device"
+	defaults "/dev/null"
+
+config DAEMON_PROC_SELF_FD
+	"Path of the procfs opened fd directory for the current process (optional)"
+	defaults "/proc/self/fd"
+
+config DAEMON_CONF_DEFAULT_UMASK
+	"Daemon configuration default umask"
+	defaults "022"
+
+config DAEMON_CONF_HAS_RTSIG
+	"Daemon configuration supports POSIX realtime signals argument parsing (optional)"
+	defaults "1"
+
+config DAEMON_CONF_MAX_UID
+	"Daemon configuration maximum value for user id"
+	defaults "65534"
+
+config DAEMON_CONF_MAX_GID
+	"Daemon configuration maximum value for group id"
+	defaults "65534"
+
+config SOCKET_CONNECTIONS_BUFFER_SIZE
+	"Size of the buffer used to read from socket connections"
+	defaults "512"
+
+config SOCKET_ENDPOINTS_MAX_CONNECTIONS
+	"Maximum connections an endpoint should listen to"
+	defaults "128"
+
+config SOCKET_ENDPOINTS_PATH
+	"Endpoints directory path"
+	defaults "$(runstatedir)/init"
+
+config SOCKET_ENDPOINTS_ROOT
+	"Filename of the first endpoint"
+	defaults "initctl"

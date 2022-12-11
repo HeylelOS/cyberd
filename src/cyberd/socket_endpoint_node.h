@@ -4,6 +4,8 @@
 
 #include "capabilities.h"
 
+extern const char *socket_endpoints_path;
+
 struct socket_node *
 socket_endpoint_node_create(const char *name, capset_t capabilities);
 

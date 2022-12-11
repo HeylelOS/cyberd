@@ -2,33 +2,52 @@
 #include "daemon.h"
 
 #include "spawns.h"
-#include "log.h"
-
-#include "config.h"
 
 #include <stdlib.h> /* free, exit, ... */
 #include <stdint.h> /* INT32_MAX */
 #include <stdnoreturn.h> /* noreturn */
 #include <sys/resource.h> /* setpriority */
 #include <sys/stat.h> /* umask */
+#include <syslog.h> /* syslog */
 #include <unistd.h> /* close, chdir, setuid... */
-#include <signal.h> /* kill */
+#include <signal.h> /* sigemptyset, sigprocmask, kill */
 #include <string.h> /* strdup */
+#include <alloca.h> /* alloca */
+#include <fcntl.h> /* open */
 #include <errno.h> /* errno */
 #include <err.h> /* err, warn, ... */
 
-#ifdef CONFIG_HAS_PROCFS
+#ifdef CONFIG_DAEMON_PROC_SELF_FD
 #include <dirent.h> /* opendir, ... */
 #endif
 
 /**
- * Closes all opened file descriptors of the current process.
+ * Empty signal procmask of the current process.
  */
 static int
-daemon_child_close_all(void) {
-#ifdef CONFIG_HAS_PROCFS
-	DIR * const dirp = opendir("/proc/self/fd");
-	int retval = 0;
+daemon_child_sigprocmask(void) {
+	sigset_t sigmask;
+
+	if (sigemptyset(&sigmask) != 0) {
+		return -1;
+	}
+
+	if (sigprocmask(SIG_SETMASK, &sigmask, NULL) != 0) {
+		return -1;
+	}
+
+	return 0;
+}
+
+/**
+ * Closes all non-std opened file descriptors of the current process.
+ */
+static int
+daemon_child_close_nonstd(void) {
+#ifdef CONFIG_DAEMON_PROC_SELF_FD
+	static const char path[] = CONFIG_DAEMON_PROC_SELF_FD;
+	DIR * const dirp = opendir(path);
+	int ret = 0;
 
 	if (dirp != NULL) {
 		struct dirent *entry;
@@ -37,75 +56,38 @@ daemon_child_close_all(void) {
 		while (errno = 0, entry = readdir(dirp), entry != NULL) {
 			unsigned long fd = strtoul(entry->d_name, &end, 10);
 
-			if (*end == '\0' && fd < INT32_MAX && fd != dirfd(dirp)) {
+			if (*end == '\0' && fd <= INT32_MAX
+				&& fd > STDERR_FILENO && fd != dirfd(dirp)) {
 				close((int)fd);
 			}
 		}
 
 		if (errno != 0) {
 			warn("readdir");
-			retval = -1;
+			ret = -1;
 		}
 
 		closedir(dirp);
 	} else {
-		warn("opendir('/proc/self/fd')");
-		retval = -1;
+		warn("opendir '%s'", path);
+		ret = -1;
 	}
 
-	return retval;
+	return ret;
 #else
 	const int fdmax = (int)sysconf(_SC_OPEN_MAX); /* Truncation should not be a problem here */
 
 	if (fdmax < 0) {
-		warn("sysconf(_SC_OPEN_MAX)");
+		warn("sysconf _SC_OPEN_MAX");
 		return -1;
 	}
 
-	for (int fd = 0; fd <= fdmax; fd++) {
+	for (int fd = STDERR_FILENO + 1; fd <= fdmax; fd++) {
 		close(fd);
 	}
 
 	return 0;
 #endif
-}
-
-/**
- * Returns an argument array suitable for _execve(2)_.
- * @param name Name of the daemon used as a fallback if @p conf doesn't have a configured argument array.
- * @param conf Configuration from which we retrieve the argument array if available.
- * @returns Argument array.
- */
-static char **
-daemon_child_argv(const char *name, const struct daemon_conf *conf) {
-
-	if (conf->arguments != NULL) {
-		return conf->arguments;
-	} else {
-		static char *emptyargv[2];
-
-		emptyargv[0] = (char *)name;
-		emptyargv[1] = NULL;
-
-		return emptyargv;
-	}
-}
-
-/**
- * Returns an environment array suitable for _execve(2)_.
- * @param conf Configuration from which we retrieve the environment array if available.
- * @returns Environment array.
- */
-static char **
-daemon_child_envp(const struct daemon_conf *conf) {
-
-	if (conf->environment != NULL) {
-		return conf->environment;
-	} else {
-		static char *emptyenvp[] = { NULL };
-
-		return emptyenvp;
-	}
 }
 
 /**
@@ -116,35 +98,122 @@ daemon_child_envp(const struct daemon_conf *conf) {
  */
 static void noreturn
 daemon_child_setup(const char *name, const struct daemon_conf *conf) {
+	const char *in = conf->in,
+	           *out = conf->out,
+		   *workdir = conf->workdir;
+	char **argv = conf->arguments, **envp = conf->environment;
+	int infd, outfd, errfd;
+
+	/********************
+	 * Setting defaults *
+	 ********************/
+
+	if (conf->in == NULL) {
+		in = CONFIG_DAEMON_DEV_NULL;
+	}
+
+	if (conf->out == NULL) {
+		out = CONFIG_DAEMON_DEV_NULL;
+	}
+
+	if (conf->workdir == NULL) {
+		workdir = CONFIG_DAEMON_DEFAULT_WORKDIR;
+	}
+
+	if (argv == NULL) {
+		argv = alloca(sizeof (*argv) * 2);
+		argv[0] = (char *)name;
+		argv[1] = NULL;
+	}
+
+	if (envp == NULL) {
+		envp = alloca(sizeof (*envp) * 1);
+		envp[0] = NULL;
+	}
+
+	/*************************************
+	 * Opening standard file descriptors *
+	 *************************************/
+
+	infd = open(in, O_RDONLY);
+	if (infd < 0) {
+		err(-1, "open '%s'", in);
+	}
+
+	outfd = open(out, O_WRONLY);
+	if (outfd < 0) {
+		err(-1, "open '%s'", out);
+	}
+
+	if (conf->err != NULL) {
+		errfd = open(conf->err, O_WRONLY);
+		if (errfd < 0) {
+			err(-1, "open '%s'", conf->err);
+		}
+	} else {
+		errfd = dup(outfd);
+	}
+
+	/**************************************
+	 * Replacing default file descriptors *
+	 **************************************/
+
+	if (dup2(infd, STDIN_FILENO) < 0) {
+		err(-1, "dup2 STDIN_FILENO");
+	}
+
+	if (dup2(outfd, STDOUT_FILENO) < 0) {
+		err(-1, "dup2 STDOUT_FILENO");
+	}
+
+	if (dup2(errfd, STDERR_FILENO) < 0) {
+		err(-1, "dup2 STDERR_FILENO");
+	}
+
+	/***********************************************
+	 * Parent process-inherited capabilities reset *
+	 ***********************************************/
 
 	umask(conf->umask);
 
-	if (daemon_child_close_all() != 0) {
-		exit(EXIT_FAILURE);
+	if (chdir(workdir) < 0) {
+		err(-1, "chdir '%s'", workdir);
 	}
 
-	if (conf->workdir != NULL && chdir(conf->workdir) != 0) {
-		err(EXIT_FAILURE, "chdir '%s'", conf->workdir);
+	if (daemon_child_sigprocmask() < 0) {
+		err(-1, "daemon_child_sigprocmask");
 	}
 
-	if (setuid(conf->uid) != 0) {
-		err(EXIT_FAILURE, "setuid %d", conf->uid);
+	if (daemon_child_close_nonstd() < 0) {
+		err(-1, "daemon_child_close_nonstd");
 	}
 
-	if (setgid(conf->gid) != 0) {
-		err(EXIT_FAILURE, "setgid %d", conf->gid);
+	/**************************************
+	 * Process credentials and scheduling *
+	 **************************************/
+
+	if (setuid(conf->uid) < 0) {
+		err(-1, "setuid %d", conf->uid);
 	}
 
-	if (setsid() < 0) {
-		err(EXIT_FAILURE, "setsid");
+	if (setgid(conf->gid) < 0) {
+		err(-1, "setgid %d", conf->gid);
+	}
+
+	if (!conf->nosid && setsid() < 0) {
+		err(-1, "setsid");
 	}
 
 	if (setpriority(PRIO_PROCESS, 0, conf->priority) != 0) {
-		err(EXIT_FAILURE, "setpriority %d", conf->priority);
+		err(-1, "setpriority %d", conf->priority);
 	}
 
-	execve(conf->path, daemon_child_argv(name, conf), daemon_child_envp(conf));
-	err(EXIT_FAILURE, "execve '%s'", conf->path);
+	/********
+	 * Exec *
+	 ********/
+
+	execve(conf->path, argv, envp);
+	err(-1, "execve '%s'", conf->path);
 }
 
 /**
@@ -224,21 +293,20 @@ daemon_start(struct daemon *daemon) {
 
 	switch (daemon->state) {
 	case DAEMON_RUNNING:
-		log_info("daemon_start: '%s' already started", daemon->name);
+		syslog(LOG_INFO, "daemon_start: '%s' already started", daemon->name);
 		break;
 	case DAEMON_STOPPED:
 		if (daemon_spawn(daemon) == 0) {
-			log_info("daemon_start: '%s' started with pid: %d", daemon->name, daemon->pid);
+			syslog(LOG_INFO, "daemon_start: '%s' started with pid: %d", daemon->name, daemon->pid);
 		} else {
-			log_info("daemon_start: '%s' start failed", daemon->name);
+			syslog(LOG_INFO, "daemon_start: '%s' start failed", daemon->name);
 		}
 		break;
 	case DAEMON_STOPPING:
-		log_info("daemon_start: '%s' is stopping", daemon->name);
+		syslog(LOG_INFO, "daemon_start: '%s' is stopping", daemon->name);
 		break;
 	default:
-		log_error("daemon_start: '%s' is in an inconsistent state", daemon->name);
-		break;
+		abort();
 	}
 }
 
@@ -251,19 +319,18 @@ daemon_stop(struct daemon *daemon) {
 
 	switch (daemon->state) {
 	case DAEMON_RUNNING:
-		log_info("daemon_stop: '%s' stopping with signal %d", daemon->name, daemon->conf.sigfinish);
+		syslog(LOG_INFO, "daemon_stop: '%s' stopping with signal %d", daemon->name, daemon->conf.sigfinish);
 		kill(daemon->pid, daemon->conf.sigfinish);
 		daemon->state = DAEMON_STOPPING;
 		break;
 	case DAEMON_STOPPED:
-		log_info("daemon_stop: '%s' already stopped", daemon->name);
+		syslog(LOG_INFO, "daemon_stop: '%s' already stopped", daemon->name);
 		break;
 	case DAEMON_STOPPING:
-		log_info("daemon_stop: '%s' is stopping", daemon->name);
+		syslog(LOG_INFO, "daemon_stop: '%s' is stopping", daemon->name);
 		break;
 	default:
-		log_error("daemon_stop: '%s' is in an inconsistent state", daemon->name);
-		break;
+		abort();
 	}
 }
 
@@ -276,18 +343,17 @@ daemon_reload(struct daemon *daemon) {
 
 	switch (daemon->state) {
 	case DAEMON_RUNNING:
-		log_info("daemon_reload: '%s' reloading with signal %d", daemon->name, daemon->conf.sigreload);
+		syslog(LOG_INFO, "daemon_reload: '%s' reloading with signal %d", daemon->name, daemon->conf.sigreload);
 		kill(daemon->pid, daemon->conf.sigreload);
 		break;
 	case DAEMON_STOPPED:
-		log_info("daemon_reload: '%s' is stopped", daemon->name);
+		syslog(LOG_INFO, "daemon_reload: '%s' is stopped", daemon->name);
 		break;
 	case DAEMON_STOPPING:
-		log_info("daemon_reload: '%s' is stopping", daemon->name);
+		syslog(LOG_INFO, "daemon_reload: '%s' is stopping", daemon->name);
 		break;
 	default:
-		log_error("daemon_reload: '%s' is in and inconsistent state", daemon->name);
-		break;
+		abort();
 	}
 }
 
@@ -300,18 +366,17 @@ daemon_end(struct daemon *daemon) {
 
 	switch (daemon->state) {
 	case DAEMON_RUNNING:
-		log_info("daemon_end: '%s' was running, ending...", daemon->name);
+		syslog(LOG_INFO, "daemon_end: '%s' was running, ending...", daemon->name);
 		kill(daemon->pid, SIGKILL);
 		break;
 	case DAEMON_STOPPED:
-		log_info("daemon_end: '%s' is stopped", daemon->name);
+		syslog(LOG_INFO, "daemon_end: '%s' is stopped", daemon->name);
 		break;
 	case DAEMON_STOPPING:
-		log_info("daemon_end: '%s' ending...", daemon->name);
+		syslog(LOG_INFO, "daemon_end: '%s' ending...", daemon->name);
 		kill(daemon->pid, SIGKILL);
 		break;
 	default:
-		log_error("daemon_end: '%s' is in an inconsistent state", daemon->name);
-		break;
+		abort();
 	}
 }

@@ -3,11 +3,9 @@
 
 #include "daemon.h"
 #include "tree.h"
-#include "log.h"
-
-#include "config.h"
 
 #include <string.h> /* strcmp */
+#include <syslog.h> /* syslog */
 #include <unistd.h> /* close */
 #include <dirent.h> /* opendir, ... */
 #include <fcntl.h> /* openat */
@@ -77,6 +75,11 @@ configuration_find(const char *name) {
  *****************************************/
 
 /**
+ * Daemons configurations path, loaded once by @ref configuration_load.
+ */
+static const char *configuration_path;
+
+/**
  * Load a new daemon's configuration.
  * This function is called during @ref configuration_load and may start daemons,
  * which requires all other subsystems to already be available.
@@ -91,7 +94,7 @@ configuration_daemons_load(const char *name, FILE *filep) {
 		if (daemon_conf_parse(&daemon->conf, filep) == 0) {
 			tree_insert(&daemons, daemon);
 
-			log_info("'%s' loaded", daemon->name);
+			syslog(LOG_INFO, "'%s' loaded", daemon->name);
 
 			if (daemon->conf.start.load) {
 				daemon_start(daemon);
@@ -123,14 +126,14 @@ configuration_daemons_reload(const char *name, FILE *filep, struct tree *olddaem
 			daemon_conf_deinit(&daemon->conf);
 			daemon->conf = newconf;
 
-			log_info("'%s' reloaded", daemon->name);
+			syslog(LOG_INFO, "'%s' reloaded", daemon->name);
 
 			if (daemon->conf.start.reload) {
 				daemon_start(daemon);
 			}
 		} else {
 			daemon_conf_deinit(&newconf);
-			log_error("Unable to reload '%s'", daemon->name);
+			syslog(LOG_ERR, "Unable to reload '%s'", daemon->name);
 		}
 
 		tree_insert(&daemons, daemon);
@@ -155,10 +158,10 @@ configuration_fopenat(int dirfd, const char *path) {
 		filep = fdopen(fd, "r");
 		if (filep == NULL) {
 			close(fd);
-			log_error("configuration fdopen '%s': %m", path);
+			syslog(LOG_ERR, "configuration fdopen '%s': %m", path);
 		}
 	} else {
-		log_error("configuration openat '%s': %m", path);
+		syslog(LOG_ERR, "configuration openat '%s': %m", path);
 		filep = NULL;
 	}
 
@@ -170,33 +173,39 @@ configuration_fopenat(int dirfd, const char *path) {
  * This function may start daemons, and suppose all subsystems have been initialized.
  */
 void
-configuration_load(void) {
+configuration_load(const char *path) {
 	DIR *dirp;
 
-	log_info("configuration_init");
+	configuration_path = path;
+	syslog(LOG_INFO, "configuration_init %s", path);
 
-	dirp = opendir(CONFIG_CONFIGURATION_DIRECTORY);
+	dirp = opendir(configuration_path);
 	if (dirp != NULL) {
 		struct dirent *entry;
 
 		while (errno = 0, entry = readdir(dirp), entry != NULL) {
-			if (*entry->d_name != '.') {
-				FILE * const filep = configuration_fopenat(dirfd(dirp), entry->d_name);
+			FILE *filep;
 
-				if (filep != NULL) {
-					configuration_daemons_load(entry->d_name, filep);
-					fclose(filep);
-				}
+			if (*entry->d_name == '.') {
+				continue;
 			}
+
+			filep = configuration_fopenat(dirfd(dirp), entry->d_name);
+			if (filep == NULL) {
+				continue;
+			}
+
+			configuration_daemons_load(entry->d_name, filep);
+			fclose(filep);
 		}
 
 		if (errno != 0) {
-			log_error("configuration_load readdir: %m");
+			syslog(LOG_ERR, "configuration_load readdir: %m");
 		}
 
 		closedir(dirp);
 	} else {
-		log_error("configuration_load opendir '"CONFIG_CONFIGURATION_DIRECTORY"': %m");
+		syslog(LOG_ERR, "configuration_load opendir '%s': %m", configuration_path);
 	}
 }
 
@@ -209,32 +218,37 @@ configuration_reload(void) {
 	struct tree olddaemons = daemons;
 	DIR *dirp;
 
-	log_info("configuration_reload");
+	syslog(LOG_INFO, "configuration_reload %s", configuration_path);
 
 	daemons.root = NULL;
 
-	dirp = opendir(CONFIG_CONFIGURATION_DIRECTORY);
+	dirp = opendir(configuration_path);
 	if (dirp != NULL) {
 		struct dirent *entry;
 
 		while (errno = 0, entry = readdir(dirp), entry != NULL) {
-			if (*entry->d_name != '.') {
-				FILE * const filep = configuration_fopenat(dirfd(dirp), entry->d_name);
+			FILE *filep;
 
-				if (filep != NULL) {
-					configuration_daemons_reload(entry->d_name, filep, &olddaemons);
-					fclose(filep);
-				}
+			if (*entry->d_name == '.') {
+				continue;
 			}
+
+			filep = configuration_fopenat(dirfd(dirp), entry->d_name);
+			if (filep == NULL) {
+				continue;
+			}
+
+			configuration_daemons_reload(entry->d_name, filep, &olddaemons);
+			fclose(filep);
 		}
 
 		if (errno != 0) {
-			log_error("configuration_reload readdir: %m");
+			syslog(LOG_ERR, "configuration_reload readdir: %m");
 		}
 
 		closedir(dirp);
 	} else {
-		log_error("configuration_reload opendir: %m");
+		syslog(LOG_ERR, "configuration_reload opendir '%s': %m", configuration_path);
 	}
 
 	tree_mutate(&olddaemons, daemons_destroy_element);

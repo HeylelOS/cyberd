@@ -3,7 +3,6 @@
 #include "socket_switch.h"
 #include "signals.h"
 #include "spawns.h"
-#include "log.h"
 
 /**
  * @mainpage Cyberd init
@@ -30,20 +29,55 @@
 #include <stdlib.h> /* exit */
 #include <stdnoreturn.h> /* noreturn */
 #include <sys/reboot.h> /* reboot */
-#include <sys/stat.h> /* umask */
-#include <unistd.h> /* sync */
+#include <sys/wait.h> /* waitpid */
+#include <signal.h> /* kill */
+#include <syslog.h> /* setlogmask, openlog, closelog, syslog */
+#include <libgen.h> /* basename */
+#include <unistd.h> /* setsid, sync */
 #include <time.h> /* nanosleep */
 #include <errno.h> /* EINTR */
 
-#ifdef NDEBUG
-#include <sys/wait.h> /* waitpid */
-#include <signal.h> /* kill */
+#ifdef CONFIG_RC_PATH
+/**
+ * Run commands.
+ * Run an early executable providing system initialization,
+ * which may load some drivers, mount filesystems, etc...
+ * @param path Path of the executable.
+ */
+static void
+rc(const char *path) {
+	static char * const argv [] = { "rc", NULL };
+	const pid_t pid = fork();
+	int wstatus;
+
+	switch (pid) {
+	case 0:
+		execv(path, argv);
+		syslog(LOG_ERR, "execv: %m");
+		exit(-1);
+	case -1:
+		syslog(LOG_ERR, "fork: %m");
+		break;
+	default:
+		if (waitpid(pid, &wstatus, 0) < 0) {
+			syslog(LOG_ERR, "waitpid %d: %m", pid);
+		}
+		if (WIFEXITED(wstatus) && WEXITSTATUS(wstatus) != 0) {
+			syslog(LOG_ERR, "rc %s exited with status %d", path, WEXITSTATUS(wstatus));
+		} else if (WIFSIGNALED(wstatus)) {
+			syslog(LOG_ERR, "rc %s killed by signal %d", path, WTERMSIG(wstatus));
+		} else if (WCOREDUMP(wstatus)) {
+			syslog(LOG_ERR, "rc %s dumped core", path);
+		}
+		break;
+	}
+}
 #endif
 
 /**
  * Setup all core subsystems.
- * Initialize umask to something common. Sanity check our pid and user id.
- * Opens log subsystem with process name. Setup signal handlers. Create first endpoint.
+ * Opens log subsystem. If configured, run commands.
+ * Setup signal handlers. Create first endpoint.
  * And finally, load our configuration.
  * @param argc Arguments count.
  * @param argv Arguments values.
@@ -51,23 +85,26 @@
  */
 static void
 setup(int argc, char **argv, sigset_t *sigmaskp) {
+	int mask = LOG_MASK(LOG_WARNING) | LOG_MASK(LOG_ERR);
 
-	umask(022);
-
-#ifdef NDEBUG
-	if (getpid() != 1) {
-		errx(EXIT_FAILURE, "Must be run as pid 1");
-	}
-
-	if (setuid(0) != 0) {
-		errx(EXIT_FAILURE, "Must be run as root");
-	}
+#ifndef NDEBUG
+	mask |= LOG_MASK(LOG_DEBUG) | LOG_MASK(LOG_INFO);
 #endif
 
-	log_setup(*argv);
+	setlogmask(mask);
+	openlog(basename(*argv), LOG_PID | LOG_CONS | LOG_NDELAY | LOG_NOWAIT, LOG_USER);
+
+	if (setsid() < 0) {
+		syslog(LOG_ERR, "setsid: %m");
+	}
+
+#ifdef CONFIG_RC_PATH
+	rc(CONFIG_RC_PATH);
+#endif
+
 	signals_setup(sigmaskp);
-	socket_switch_setup();
-	configuration_load();
+	socket_switch_setup(CONFIG_SOCKET_ENDPOINTS_PATH, CONFIG_SOCKET_ENDPOINTS_ROOT);
+	configuration_load(CONFIG_CONFIGURATION_PATH);
 }
 
 /**
@@ -83,7 +120,7 @@ teardown(void) {
 		.tv_nsec = 0
 	}, rem;
 
-	log_info("ending");
+	syslog(LOG_INFO, "ending");
 
 	/* Notify spawns they should stop */
 	spawns_stop();
@@ -104,21 +141,19 @@ teardown(void) {
 	/* And then SIGKILL and wait everyone left. */
 	spawns_end();
 
-#ifdef NDEBUG
 	/* In release, really everyone left. This way, we are ready for @ref _sync(2)_. */
 	kill(-1, SIGKILL);
 
 	pid_t pid;
 	while (pid = waitpid(-1, NULL, 0), pid > 0) {
-		log_info("Orphan process (pid: %d) force-ended", pid);
+		syslog(LOG_INFO, "Orphan process (pid: %d) force-ended", pid);
 	}
-#endif
 
 #ifdef CONFIG_MEMORY_CLEANUP
 	configuration_teardown();
 #endif
 
-	log_teardown();
+	closelog();
 
 	/* Synchronize all filesystems to disk(s),
 	 * note: Standard specifies it may return before all syncs done */
@@ -141,8 +176,6 @@ main(int argc, char **argv) {
 
 	setup(argc, argv, &sigmask);
 
-	log_info("running");
-
 	while (!signals_requested_reboot) {
 		fd_set *readfds, *writefds, *exceptfds;
 		int fds = socket_switch_prepare(&readfds, &writefds, &exceptfds);
@@ -153,7 +186,7 @@ main(int argc, char **argv) {
 		if (fds >= 0) {
 			socket_switch_operate(fds);
 		} else if (errno != EINTR) {
-			log_error("pselect: %m");
+			syslog(LOG_ERR, "pselect: %m");
 		}
 	}
 

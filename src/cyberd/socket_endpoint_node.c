@@ -5,12 +5,10 @@
 #include "socket_connection_node.h"
 #include "socket_switch.h"
 #include "socket_node.h"
-#include "log.h"
-
-#include "config.h"
 
 #include <stdio.h> /* snprintf */
 #include <stdlib.h> /* malloc, free */
+#include <syslog.h> /* syslog */
 #include <unistd.h> /* unlink, close */
 #include <sys/socket.h> /* socket, bind, listen, ... */
 #include <sys/un.h> /* sockaddr_un */
@@ -23,6 +21,9 @@ struct socket_endpoint_node {
 	capset_t capabilities; /**< Associated capabilities */
 };
 
+/** Socket endpoints location in the host filesystem. Initialized by @ref socket_switch_setup. */
+const char *socket_endpoints_path;
+
 /** Socket endpoint operate, accept incoming connection and record it in socket switch. */
 static void
 socket_endpoint_node_operate(struct socket_node *snode) {
@@ -34,7 +35,7 @@ socket_endpoint_node_operate(struct socket_node *snode) {
 	len = sizeof (addr);
 	fd = accept(endpoint->super.fd, (struct sockaddr *)&addr, &len);
 	if (fd < 0) {
-		log_error("socket_endpoint_node_operate: accept: %m");
+		syslog(LOG_ERR, "socket_endpoint_node_operate: accept: %m");
 		return;
 	}
 
@@ -74,23 +75,23 @@ socket_endpoint_node_create(const char *name, capset_t capabilities) {
 	struct socket_endpoint_node *endpoint;
 
 	if (fd < 0) {
-		log_error("socket_endpoint_node_create: socket %s: %m", name);
+		syslog(LOG_ERR, "socket_endpoint_node_create: socket %s: %m", name);
 		goto socket_endpoint_node_create_err0;
 	}
 
-	const int namelen = snprintf(addr.sun_path, SOCKADDR_UN_MAXLEN, CONFIG_ENDPOINTS_DIRECTORY"/%s", name);
+	const int namelen = snprintf(addr.sun_path, SOCKADDR_UN_MAXLEN, "%s/%s", socket_endpoints_path, name);
 	if (namelen < 0 || namelen >= SOCKADDR_UN_MAXLEN) {
-		log_error("socket_endpoint_node_create '%s': Invalid name", name);
+		syslog(LOG_ERR, "socket_endpoint_node_create '%s': Invalid name", name);
 		goto socket_endpoint_node_create_err1;
 	}
 
 	if (bind(fd, (const struct sockaddr *)&addr, sizeof (addr)) != 0) {
-		log_error("socket_endpoint_node_create bind '%s': %m", name);
+		syslog(LOG_ERR, "socket_endpoint_node_create bind '%s': %m", name);
 		goto socket_endpoint_node_create_err1;
 	}
 
-	if (listen(fd, CONFIG_ENDPOINTS_CONNECTIONS) != 0) {
-		log_error("socket_endpoint_node_create listen '%s': %m", name);
+	if (listen(fd, CONFIG_SOCKET_ENDPOINTS_MAX_CONNECTIONS) != 0) {
+		syslog(LOG_ERR, "socket_endpoint_node_create listen '%s': %m", name);
 		goto socket_endpoint_node_create_err2;
 	}
 

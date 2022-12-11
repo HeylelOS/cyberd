@@ -2,10 +2,8 @@
 #include "spawns.h"
 
 #include "tree.h"
-#include "log.h"
 
-#include "config.h"
-
+#include <syslog.h> /* syslog */
 #include <sys/wait.h> /* waitpid */
 
 /**
@@ -77,9 +75,9 @@ spawns_end_element(tree_element_t *element) {
 
 	if (waitpid(daemon->pid, NULL, 0) == daemon->pid) {
 		daemon->state = DAEMON_STOPPED;
-		log_info("Daemon '%s' (pid: %d) force-ended", daemon->name, daemon->pid);
+		syslog(LOG_INFO, "Daemon '%s' (pid: %d) force-ended", daemon->name, daemon->pid);
 	} else {
-		log_error("Error while ending daemon '%s': waitpid %d: %m", daemon->name, daemon->pid);
+		syslog(LOG_ERR, "Error while ending daemon '%s': waitpid %d: %m", daemon->name, daemon->pid);
 	}
 }
 

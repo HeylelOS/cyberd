@@ -2,13 +2,11 @@
 #ifndef CONFIGURATION_H
 #define CONFIGURATION_H
 
-#include "config.h"
-
 struct daemon *
 configuration_find(const char *name);
 
 void
-configuration_load(void);
+configuration_load(const char *path);
 
 void
 configuration_reload(void);

@@ -3,13 +3,11 @@
 
 #include "socket_endpoint_node.h"
 #include "socket_node.h"
-#include "log.h"
-
-#include "config.h"
 
 #include <stdlib.h> /* NULL */
 #include <string.h> /* memcpy */
 #include <sys/stat.h> /* mkdir */
+#include <syslog.h> /* syslog */
 #include <errno.h> /* errno, ... */
 
 #include <assert.h> /* assert */
@@ -28,17 +26,18 @@ static struct {
 
 /** Create the first communication endpoint. */
 void
-socket_switch_setup(void) {
+socket_switch_setup(const char *path, const char *root) {
 	struct socket_node *snode;
 
-	if (mkdir(CONFIG_ENDPOINTS_DIRECTORY, 0777) != 0 && errno != EEXIST) {
-		log_error("socket_switch_setup: Unable to create controllers directory '"CONFIG_ENDPOINTS_DIRECTORY"': %m");
+	socket_endpoints_path = path;
+	if (mkdir(socket_endpoints_path, 0777) != 0 && errno != EEXIST) {
+		syslog(LOG_ERR, "socket_switch_setup: Unable to create controllers directory '%s': %m", socket_endpoints_path);
 		return;
 	}
 
-	snode = socket_endpoint_node_create(CONFIG_ENDPOINTS_ROOT, CAPSET_ALL);
+	snode = socket_endpoint_node_create(root, CAPSET_ALL);
 	if (snode == NULL) {
-		log_error("socket_switch_setup: Unable to create '"CONFIG_ENDPOINTS_ROOT"' root endpoint");
+		syslog(LOG_ERR, "socket_switch_setup: Unable to create '%s' root endpoint", root);
 		return;
 	}
 

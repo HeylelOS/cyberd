@@ -1,30 +1,28 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 #include "daemon_conf.h"
 
-#include "log.h"
-
-#include "config.h"
-
 #include <stdlib.h> /* realloc, free, strtol, ... */
 #include <signal.h> /* SIGABRT, ... */
 #include <string.h> /* strlen, strdup */
+#include <syslog.h> /* syslog */
 #include <unistd.h> /* getuid, getgid */
 #include <limits.h> /* INT_MAX */
 #include <ctype.h> /* isspace, isdigit */
 #include <pwd.h> /* getpwnam */
 #include <grp.h> /* getgrnam */
-#include <assert.h> /* static_assert */
 #include <errno.h> /* errno */
 
 /** Helper macro to describe a signal */
 #define SIGNAL_DESCRIPTION(desc) { SIG##desc, #desc }
 
-/** Available sections */
-enum daemon_conf_section {
-	SECTION_GENERAL,
-	SECTION_ENVIRONMENT,
-	SECTION_START,
-	SECTION_UNKNOWN,
+struct daemon_conf_value {
+	int (* const parse)(struct daemon_conf *, const char *, const char *);
+	const char * const key;
+};
+
+struct daemon_conf_section {
+	const struct daemon_conf_value * const values;
+	const char * const name;
 };
 
 /*****************************
@@ -34,29 +32,32 @@ enum daemon_conf_section {
 /**
  * Append a value at the end of a string list.
  * @param[in,out] listp List of values.
- * @param string Value to append.
+ * @param string Value to append, copied.
  * @returns Zero on success, non-zero else.
  */
 static int
-daemon_conf_list_append(char ***listp, char *string) {
-	size_t count, newcapacity;
-	char **list = *listp;
+daemon_conf_list_append(char ***listp, const char *string) {
+	char **list = *listp, *str = strdup(string);
+	unsigned int len;
 
-	if (list != NULL) {
-		for (count = 0; list[count] != NULL; count++);
-		newcapacity = count + 2;
-	} else {
-		newcapacity = CONFIG_DAEMON_CONF_LIST_DEFAULT_CAPACITY;
-		count = 0;
-	}
-
-	list = realloc(list, newcapacity * sizeof (*list));
-	if (list == NULL) {
+	if (str == NULL) {
 		return -1;
 	}
 
-	list[count] = string;
-	list[count + 1] = NULL;
+	if (list != NULL) {
+		for (len = 0; list[len] != NULL; len++);
+	} else {
+		len = 0;
+	}
+
+	list = realloc(list, (len + 2) * sizeof (*list));
+	if (list == NULL) {
+		free(str);
+		return -1;
+	}
+
+	list[len] = str;
+	list[len + 1] = NULL;
 
 	*listp = list;
 
@@ -69,17 +70,593 @@ daemon_conf_list_append(char ***listp, char *string) {
  */
 static void
 daemon_conf_list_free(char **list) {
+
 	if (list != NULL) {
-		for (char **iterator = list; *iterator != NULL; iterator++) {
-			free(*iterator);
+
+		for (unsigned int i = 0; list[i] != NULL; i++) {
+			free(list[i]);
 		}
+
 		free(list);
 	}
 }
 
-/****************
- * File parsing *
- ****************/
+/*************************
+ * Parse general section *
+ *************************/
+
+/**
+ * Replaces a previous NULL or strdup'ed path by a new
+ * copy of @param value, which must be an absolute path.
+ * @param value Absolute path.
+ * @param[out] pathp Replaced path, previous value
+ * freed and replaced by a copy of @param value on success.
+ * @return Zero on succress, non-zero else.
+ */
+static int
+daemon_conf_path(const char *value, char **pathp) {
+	char *path;
+
+	if (value == NULL || *value != '/') {
+		return -1;
+	}
+
+	path = strdup(value);
+	if (path == NULL) {
+		return -1;
+	}
+
+	free(*pathp);
+	*pathp = path;
+
+	return 0;
+}
+
+/**
+ * Resolves a signal name to a signal number.
+ * @param signame Signal name description.
+ * @param[out] signalp Returned value of the signal number on success.
+ * @return Zero on success, non-zero else.
+ */
+static int
+daemon_conf_signal(const char *signame, int *signop) {
+	static const struct {
+		const int signo;
+		const char name[8];
+	} signals[] = {
+		SIGNAL_DESCRIPTION(ABRT),
+		SIGNAL_DESCRIPTION(ABRT),
+		SIGNAL_DESCRIPTION(ALRM),
+		SIGNAL_DESCRIPTION(BUS),
+		SIGNAL_DESCRIPTION(CHLD),
+		SIGNAL_DESCRIPTION(CONT),
+		SIGNAL_DESCRIPTION(FPE),
+		SIGNAL_DESCRIPTION(HUP),
+		SIGNAL_DESCRIPTION(ILL),
+		SIGNAL_DESCRIPTION(INT),
+		SIGNAL_DESCRIPTION(KILL),
+		SIGNAL_DESCRIPTION(PIPE),
+		SIGNAL_DESCRIPTION(QUIT),
+		SIGNAL_DESCRIPTION(SEGV),
+		SIGNAL_DESCRIPTION(STOP),
+		SIGNAL_DESCRIPTION(TERM),
+		SIGNAL_DESCRIPTION(TSTP),
+		SIGNAL_DESCRIPTION(TTIN),
+		SIGNAL_DESCRIPTION(TTOU),
+		SIGNAL_DESCRIPTION(USR1),
+		SIGNAL_DESCRIPTION(USR2),
+		SIGNAL_DESCRIPTION(POLL),
+		SIGNAL_DESCRIPTION(PROF),
+		SIGNAL_DESCRIPTION(SYS),
+		SIGNAL_DESCRIPTION(TRAP),
+		SIGNAL_DESCRIPTION(URG),
+		SIGNAL_DESCRIPTION(VTALRM),
+		SIGNAL_DESCRIPTION(XCPU),
+		SIGNAL_DESCRIPTION(XFSZ),
+	};
+	unsigned long lsigno;
+	char *end;
+	int i;
+
+	if (signame == NULL) {
+		return -1;
+	}
+
+	if (isdigit(*signame)) {
+
+		lsigno = strtoul(signame, &end, 10);
+		if (*end != '\0' || lsigno > INT_MAX) {
+			return -1;
+		}
+
+		*signop = (int)lsigno;
+
+		return 0;
+	}
+
+	if (strncasecmp("SIG", signame, 3) == 0) {
+		signame += 3;
+	}
+
+#ifdef CONFIG_DAEMON_CONF_HAS_RTSIG
+	if (strncasecmp("RT", signame, 2) == 0) {
+
+		lsigno = strtoul(signame + 2, &end, 10);
+		if (*end != '\0' || lsigno > (SIGRTMAX - SIGRTMIN)) {
+			return -1;
+		}
+
+		*signop = (int)lsigno + SIGRTMIN;
+		return 0;
+	}
+#endif
+
+	i = 0;
+	while (i < sizeof (signals) / sizeof (*signals) && strcasecmp(signals[i].name, signame) != 0) {
+		i++;
+	}
+
+	if (i == sizeof (signals) / sizeof (*signals)) {
+		return -1;
+	}
+
+	*signop = signals[i].signo;
+
+	return 0;
+}
+
+static int
+daemon_conf_parse_general_arguments(struct daemon_conf *conf, const char *key, const char *value) {
+	enum {
+		EXPAND_SPACES,
+		EXPAND_LITERAL,
+		EXPAND_QUOTE_SINGLE,
+		EXPAND_QUOTE_DOUBLE,
+		EXPAND_QUOTE_DOUBLE_ESCAPE,
+		EXPAND_END,
+		EXPAND_ERROR_UNCLOSED_QUOTE,
+	} state = EXPAND_SPACES;
+	char **arguments, *it, *dst, *src, *arg;
+
+	if (value == NULL) {
+		return -1;
+	}
+
+	{ /* Make a local copy of value for in-place expansion */
+		const size_t size = strlen(value) + 1;
+		it = memcpy(alloca(size), value, size);
+	}
+
+	arguments = NULL;
+	while (state < EXPAND_END) {
+		switch (state) {
+		case EXPAND_SPACES:
+			switch (*it) {
+			case '\0': state = EXPAND_END; break;
+			case ' ':  break;
+			case '"':  state = EXPAND_QUOTE_DOUBLE; dst = src = arg = it; src++; break;
+			case '\'': state = EXPAND_QUOTE_SINGLE; dst = src = arg = it; src++; break;
+			default:   state = EXPAND_LITERAL; dst = src = arg = it; dst++; src++; break;
+			}
+			break;
+		case EXPAND_LITERAL:
+			switch (*it) {
+			case '\0':
+				state = EXPAND_END; *dst = '\0';
+				if (daemon_conf_list_append(&arguments, arg) != 0) {
+					goto failure;
+				}
+				break;
+			case '"':  state = EXPAND_QUOTE_DOUBLE; src++; break;
+			case '\'': state = EXPAND_QUOTE_SINGLE; src++; break;
+			case ' ':
+				state = EXPAND_SPACES; *dst = '\0';
+				if (daemon_conf_list_append(&arguments, arg) != 0) {
+					goto failure;
+				}
+				break;
+			default:   *dst++ = *src++; break;
+			}
+			break;
+		case EXPAND_QUOTE_SINGLE:
+			switch (*it) {
+			case '\0': state = EXPAND_ERROR_UNCLOSED_QUOTE; break;
+			case '\'': state = EXPAND_LITERAL; src++; break;
+			default:   *dst++ = *src++; break;
+			}
+			break;
+		case EXPAND_QUOTE_DOUBLE:
+			switch (*it) {
+			case '\0': state = EXPAND_ERROR_UNCLOSED_QUOTE; break;
+			case '"':  state = EXPAND_LITERAL; src++; break;
+			case '\\': state = EXPAND_QUOTE_DOUBLE_ESCAPE; src++; break;
+			default:   *dst++ = *src++; break;
+			}
+			break;
+		case EXPAND_QUOTE_DOUBLE_ESCAPE:
+			switch (*it) {
+			case '\0': state = EXPAND_ERROR_UNCLOSED_QUOTE; break;
+			default:   state = EXPAND_QUOTE_DOUBLE; *dst++ = *src++; break;
+			}
+			break;
+		default:
+			abort();
+		}
+		it++;
+	}
+
+	if (state == EXPAND_ERROR_UNCLOSED_QUOTE) {
+		goto failure;
+	}
+
+	if (arguments == NULL) {
+		goto failure;
+	}
+
+	daemon_conf_list_free(conf->arguments);
+	conf->arguments = arguments;
+
+	return 0;
+failure:
+	daemon_conf_list_free(arguments);
+	return -1;
+}
+
+static int
+daemon_conf_parse_general_group(struct daemon_conf *conf, const char *key, const char *value) {
+	struct group *group;
+
+	if (value == NULL) {
+		return -1;
+	}
+
+	errno = 0;
+	group = getgrnam(value);
+
+	if (group != NULL) {
+		conf->gid = group->gr_gid;
+		return 0;
+	}
+
+	if (errno == 0) {
+		/* No entry found, treat as decimal gid */
+		char *end;
+		const unsigned long lgid = strtoul(value, &end, 10);
+
+		if (*end != '\0' || lgid >= CONFIG_DAEMON_CONF_MAX_GID) {
+			return -1;
+		}
+
+		conf->gid = (gid_t)lgid;
+	}
+
+	return 0;
+}
+
+static int
+daemon_conf_parse_general_nosid(struct daemon_conf *conf, const char *key, const char *value) {
+
+	if (value != NULL) {
+		return -1;
+	}
+	conf->nosid = 1;
+
+	return 0;
+}
+
+static int
+daemon_conf_parse_general_path(struct daemon_conf *conf, const char *key, const char *value) {
+	return daemon_conf_path(value, &conf->path);
+}
+
+static int
+daemon_conf_parse_general_priority(struct daemon_conf *conf, const char *key, const char *value) {
+	long lpriority;
+	char *end;
+
+	if (value == NULL) {
+		return -1;
+	}
+
+	lpriority = strtol(value, &end, 10);
+	if (*end != '\0' || lpriority < -20 || lpriority > 19) {
+		return -1;
+	}
+
+	conf->priority = (int)lpriority;
+
+	return 0;
+}
+
+static int
+daemon_conf_parse_general_sigfinish(struct daemon_conf *conf, const char *key, const char *value) {
+	return daemon_conf_signal(value, &conf->sigfinish);
+}
+
+static int
+daemon_conf_parse_general_sigreload(struct daemon_conf *conf, const char *key, const char *value) {
+	return daemon_conf_signal(value, &conf->sigreload);
+}
+
+static int
+daemon_conf_parse_general_stdin(struct daemon_conf *conf, const char *key, const char *value) {
+	return daemon_conf_path(value, &conf->in);
+}
+
+static int
+daemon_conf_parse_general_stdout(struct daemon_conf *conf, const char *key, const char *value) {
+	return daemon_conf_path(value, &conf->out);
+}
+
+static int
+daemon_conf_parse_general_stderr(struct daemon_conf *conf, const char *key, const char *value) {
+	return daemon_conf_path(value, &conf->err);
+}
+
+static int
+daemon_conf_parse_general_umask(struct daemon_conf *conf, const char *key, const char *value) {
+	unsigned long cmask;
+	char *end;
+
+	if (value == NULL) {
+		return -1;
+	}
+
+	cmask = strtoul(value, &end, 8);
+	if (*end != '\0') {
+		return -1;
+	}
+
+	conf->umask = (mode_t)(cmask & 0x1FF);
+
+	return 0;
+}
+
+static int
+daemon_conf_parse_general_user(struct daemon_conf *conf, const char *key, const char *value) {
+	struct passwd *passwd;
+
+	if (value == NULL) {
+		return -1;
+	}
+
+	errno = 0;
+	passwd = getpwnam(value);
+
+	if (passwd != NULL) {
+		conf->uid = passwd->pw_uid;
+		return 0;
+	}
+
+	if (errno == 0) {
+		/* No entry found, treat as decimal uid */
+		char *end;
+		const unsigned long luid = strtoul(value, &end, 10);
+
+		if (*end != '\0' || luid >= CONFIG_DAEMON_CONF_MAX_UID) {
+			return -1;
+		}
+
+		conf->uid = (uid_t)luid;
+	}
+
+	return 0;
+}
+
+static int
+daemon_conf_parse_general_workdir(struct daemon_conf *conf, const char *key, const char *value) {
+	return daemon_conf_path(value, &conf->workdir);
+}
+
+/*****************************
+ * Parse environment section *
+ *****************************/
+
+/**
+ * Create an environment array value.
+ * @param key Key of the value.
+ * @param value Value, or _NULL_.
+ * @returns A duplicate string, if @p value is _NULL_ "<key>=<key>", else "<key>=<value>".
+ */
+static char *
+daemon_conf_envdup(const char *key, const char *value) {
+	const size_t keylength = strlen(key);
+	size_t valuelength;
+
+	if (value != NULL) {
+		valuelength = strlen(value);
+	} else {
+		valuelength = keylength;
+		value = key;
+	}
+
+	char string[keylength + valuelength + 2];
+
+	memcpy(string, key, keylength);
+	string[keylength - 1] = '='; /* We're safe, as we discarded empty keys earlier */
+	memcpy(string + keylength + 1, value, valuelength + 1);
+
+	return strdup(string);
+}
+
+/**
+ * Parse an environment section value.
+ * @param conf Configuration being parsed.
+ * @param key Key if associative, whole value if scalar.
+ * @param value Value if associative, _NULL_ if scalar.
+ * @returns Zero on successful parsing of known value, non-zero else.
+ */
+static int
+daemon_conf_parse_environment(struct daemon_conf *conf, const char *key, const char *value) {
+	const size_t keylen = strlen(key);
+	size_t valuelen, pairsz;
+	char *pair;
+
+	if (value != NULL) {
+		valuelen = strlen(value);
+	} else {
+		valuelen = keylen;
+		value = key;
+	}
+
+	pairsz = keylen + valuelen + 2;
+	pair = alloca(pairsz);
+
+	memcpy(pair, key, keylen);
+	pair[keylen] = '=';
+	memcpy(pair + keylen + 1, value, valuelen + 1);
+
+	return daemon_conf_list_append(&conf->environment, pair);
+}
+
+/***********************
+ * Parse start section *
+ ***********************/
+
+static int
+daemon_conf_parse_start_any_exit(struct daemon_conf *conf, const char *key, const char *value) {
+
+	if (value != NULL) {
+		return -1;
+	}
+	conf->start.exitsuccess = 1;
+	conf->start.exitfailure = 1;
+	conf->start.killed = 1;
+	conf->start.dumped = 1;
+
+	return 0;
+}
+
+static int
+daemon_conf_parse_start_dumped(struct daemon_conf *conf, const char *key, const char *value) {
+
+	if (value != NULL) {
+		return -1;
+	}
+	conf->start.dumped = 1;
+
+	return 0;
+}
+
+static int
+daemon_conf_parse_start_exit(struct daemon_conf *conf, const char *key, const char *value) {
+
+	if (value != NULL) {
+		return -1;
+	}
+	conf->start.exitsuccess = 1;
+	conf->start.exitfailure = 1;
+
+	return 0;
+}
+
+static int
+daemon_conf_parse_start_exit_failure(struct daemon_conf *conf, const char *key, const char *value) {
+
+	if (value != NULL) {
+		return -1;
+	}
+	conf->start.exitfailure = 1;
+
+	return 0;
+}
+
+static int
+daemon_conf_parse_start_exit_success(struct daemon_conf *conf, const char *key, const char *value) {
+
+	if (value != NULL) {
+		return -1;
+	}
+	conf->start.exitsuccess = 1;
+
+	return 0;
+}
+
+static int
+daemon_conf_parse_start_killed(struct daemon_conf *conf, const char *key, const char *value) {
+
+	if (value != NULL) {
+		return -1;
+	}
+	conf->start.killed = 1;
+
+	return 0;
+}
+
+static int
+daemon_conf_parse_start_load(struct daemon_conf *conf, const char *key, const char *value) {
+
+	if (value != NULL) {
+		return -1;
+	}
+	conf->start.load = 1;
+
+	return 0;
+}
+
+static int
+daemon_conf_parse_start_reload(struct daemon_conf *conf, const char *key, const char *value) {
+
+	if (value != NULL) {
+		return -1;
+	}
+	conf->start.reload = 1;
+
+	return 0;
+}
+
+/***************
+ * Daemon conf *
+ ***************/
+
+/**
+ * Initializes a configuration for later parsing with defaults.
+ * @param conf Configuration to initialize.
+ */
+void
+daemon_conf_init(struct daemon_conf *conf) {
+
+	conf->path = NULL;
+	conf->arguments = NULL;
+	conf->environment = NULL;
+	conf->workdir = NULL;
+	conf->in = NULL;
+	conf->out = NULL;
+	conf->err = NULL;
+
+	conf->sigfinish = SIGTERM;
+	conf->sigreload = SIGHUP;
+
+	conf->uid = 0;
+	conf->gid = 0;
+	conf->nosid = 0;
+
+	conf->umask = CONFIG_DAEMON_CONF_DEFAULT_UMASK;
+	conf->priority = 0;
+
+	conf->start.load = 0;
+	conf->start.reload = 0;
+	conf->start.exitsuccess = 0;
+	conf->start.exitfailure = 0;
+	conf->start.killed = 0;
+	conf->start.dumped = 0;
+}
+
+/**
+ * Deinitializes a configuration, freeing all used data.
+ * @param conf Configuration to deinitialize.
+ */
+void
+daemon_conf_deinit(struct daemon_conf *conf) {
+	free(conf->path);
+	free(conf->workdir);
+	daemon_conf_list_free(conf->arguments);
+	daemon_conf_list_free(conf->environment);
+}
+
+/***********************
+ * Daemon conf parsing *
+ ***********************/
 
 /**
  * Trim and parse a configuration line.
@@ -155,484 +732,55 @@ daemon_conf_parse_line(char *line, size_t length, const char **keyp, const char 
 		}
 		*valuep = separator;
 
-		return -1;
+		return 1;
 	}
 }
 
-/**
- * Resolves a user name to a user uid.
- * @param user User name or integral id of the desired uid.
- * @param uidp Return value of the uid if the call is successful.
- * @return Zero on success, non-zero else.
- */
-static int
-daemon_conf_parse_general_uid(const char *user, uid_t *uidp) {
-	struct passwd *passwd;
+static const struct daemon_conf_value general_values[] = {
+	{ daemon_conf_parse_general_arguments, "arguments" },
+	{ daemon_conf_parse_general_group,     "group" },
+	{ daemon_conf_parse_general_nosid,     "nosid" },
+	{ daemon_conf_parse_general_path,      "path" },
+	{ daemon_conf_parse_general_priority,  "priority" },
+	{ daemon_conf_parse_general_sigfinish, "sigfinish" },
+	{ daemon_conf_parse_general_sigreload, "sigreload" },
+	{ daemon_conf_parse_general_stdin,     "stdin" },
+	{ daemon_conf_parse_general_stdout,    "stdout" },
+	{ daemon_conf_parse_general_stderr,    "stderr" },
+	{ daemon_conf_parse_general_umask,     "umask" },
+	{ daemon_conf_parse_general_user,      "user" },
+	{ daemon_conf_parse_general_workdir,   "workdir" },
+	{ },
+};
 
-	errno = 0;
-	passwd = getpwnam(user);
+static const struct daemon_conf_value environment_values[] = {
+	{ daemon_conf_parse_environment },
+};
 
-	if (passwd == NULL) {
-		if (errno == 0) {
-			/* No entry found, treat as numeric gid */
-			char *end;
-			unsigned long luid = strtoul(user, &end, 10);
-
-			if (*user == '\0' || *end != '\0') {
-				log_error("daemon_conf: Unable to infer uid from '%s'", user);
-				return -1;
-			} else {
-				*uidp = (uid_t)luid;
-			}
-		} else {
-			log_error("daemon_conf: Unable to infer uid from '%s', getpwnam: %m", user);
-			return -1;
-		}
-	} else {
-		*uidp = passwd->pw_uid;
-	}
-
-	return 0;
-}
+static const struct daemon_conf_value start_values[] = {
+	{ daemon_conf_parse_start_any_exit,     "any exit" },
+	{ daemon_conf_parse_start_dumped,       "dumped" },
+	{ daemon_conf_parse_start_exit,         "exit" },
+	{ daemon_conf_parse_start_exit_failure, "exit failure" },
+	{ daemon_conf_parse_start_exit_success, "exit success" },
+	{ daemon_conf_parse_start_killed,       "killed" },
+	{ daemon_conf_parse_start_load,         "load" },
+	{ daemon_conf_parse_start_reload,       "reload" },
+	{ },
+};
 
 /**
- * Resolves a group name to a group gid.
- * @param user Group name or integral id of the desired gid.
- * @param[out] gidp Returned value of the gid on success.
- * @return Zero on success, non-zero else.
+ * Sections and values descriptions, each section group
+ * defines a list of matching parsers for each key,
+ * the last entry of each list is a 'match-all' entry with a NULL key.
+ * Function parsers are optional, and can receive both scalars and associatives values,
+ * depending on whether the given value parameter is NULL.
  */
-static int
-daemon_conf_parse_general_gid(const char *group, gid_t *gidp) {
-	struct group *grp;
-
-	errno = 0;
-	grp = getgrnam(group);
-
-	if (grp == NULL) {
-		if (errno == 0) {
-			/* No entry found, treat as numeric gid */
-			char *end;
-			unsigned long lgid = strtoul(group, &end, 10);
-
-			if (*group == '\0' || *end != '\0') {
-				log_error("daemon_conf: Unable to infer gid from '%s'", group);
-				return -1;
-			} else {
-				*gidp = (gid_t)lgid;
-			}
-		} else {
-			log_error("daemon_conf: Unable to infer gid from '%s', getgrnam: %m", group);
-			return -1;
-		}
-	} else {
-		*gidp = grp->gr_gid;
-	}
-
-	return 0;
-}
-
-/**
- * Resolves a signal name to a signal number.
- * @param signame Signal name description.
- * @param[out] signalp Returned value of the signal number on success.
- * @return Zero on success, non-zero else.
- */
-static int
-daemon_conf_parse_general_signal(const char *signame, int *signop) {
-
-	if (isdigit(*signame)) {
-		char *end;
-		const unsigned long lsignum = strtoul(signame, &end, 10);
-
-		if (*end != '\0' || lsignum > INT_MAX) {
-			log_error("daemon_conf: Unable to infer decimal signal from '%s'", signame);
-			return -1;
-		}
-
-		*signop = (int)lsignum;
-	} else {
-		static const struct {
-			const int signo;
-			const char name[8];
-		} signals[] = {
-			SIGNAL_DESCRIPTION(ABRT),
-			SIGNAL_DESCRIPTION(ABRT),
-			SIGNAL_DESCRIPTION(ALRM),
-			SIGNAL_DESCRIPTION(BUS),
-			SIGNAL_DESCRIPTION(CHLD),
-			SIGNAL_DESCRIPTION(CONT),
-			SIGNAL_DESCRIPTION(FPE),
-			SIGNAL_DESCRIPTION(HUP),
-			SIGNAL_DESCRIPTION(ILL),
-			SIGNAL_DESCRIPTION(INT),
-			SIGNAL_DESCRIPTION(KILL),
-			SIGNAL_DESCRIPTION(PIPE),
-			SIGNAL_DESCRIPTION(QUIT),
-			SIGNAL_DESCRIPTION(SEGV),
-			SIGNAL_DESCRIPTION(STOP),
-			SIGNAL_DESCRIPTION(TERM),
-			SIGNAL_DESCRIPTION(TSTP),
-			SIGNAL_DESCRIPTION(TTIN),
-			SIGNAL_DESCRIPTION(TTOU),
-			SIGNAL_DESCRIPTION(USR1),
-			SIGNAL_DESCRIPTION(USR2),
-			SIGNAL_DESCRIPTION(POLL),
-			SIGNAL_DESCRIPTION(PROF),
-			SIGNAL_DESCRIPTION(SYS),
-			SIGNAL_DESCRIPTION(TRAP),
-			SIGNAL_DESCRIPTION(URG),
-			SIGNAL_DESCRIPTION(VTALRM),
-			SIGNAL_DESCRIPTION(XCPU),
-			SIGNAL_DESCRIPTION(XFSZ),
-		};
-		unsigned int i = 0;
-
-		if (strncasecmp("SIG", signame, 3) == 0) {
-			signame += 3;
-		}
-
-		while (i < sizeof (signals) / sizeof (*signals) && strcasecmp(signals[i].name, signame) != 0) {
-			i++;
-		}
-
-		if (i == sizeof (signals) / sizeof (*signals)) {
-			log_error("daemon_conf: Unable to infer signal number from name '%s'", signame);
-			return -1;
-		}
-
-		*signop = signals[i].signo;
-	}
-
-	return 0;
-}
-
-/**
- * Determine next argument.
- * @param currentp Pointer to the beginning of the previous argument.
- * @param currentendp Pointer to the end of the previous argument.
- * @return first character of argument or '\0' if end reached.
- */
-static inline char
-daemon_conf_parse_general_arguments_next(const char ** restrict currentp, const char ** restrict currentendp) {
-	const char *current = *currentp, *currentend = *currentendp;
-
-	for (current = currentend; isspace(*current); current++);
-	for (currentend = current; *currentend != '\0' && !isspace(*currentend); currentend++);
-
-	*currentp = current;
-	*currentendp = currentend;
-
-	return *current;
-}
-
-/**
- * Parse an argument array.
- * @param args Line of arguments to parse.
- * @returns List of arguments, NULL terminated.
- */
-static int
-daemon_conf_parse_general_arguments(const char *args, char ***argumentsp) {
-	const char *current, *currentend = args;
-	char **list = NULL, *argument = NULL;
-
-	while (daemon_conf_parse_general_arguments_next(&current, &currentend) != '\0'
-		&& (argument = strndup(current, currentend - current)) != NULL
-		&& daemon_conf_list_append(&list, argument) == 0);
-
-	if (argument == NULL) {
-		daemon_conf_list_free(list);
-		log_error("daemon_conf: Unable to parse argument list '%s'", args);
-		return -1;
-	}
-
-	daemon_conf_list_free(*argumentsp);
-	*argumentsp = list;
-
-	return 0;
-}
-
-/**
- * Parse a priority, must be between -20 and 19.
- * @param prio Priority to parse.
- * @param[out] priorityp Returned priority on success.
- * @return Zero on success, non-zero else.
- */
-static int
-daemon_conf_parse_general_priority(const char *prio, int *priorityp) {
-	char *end;
-	long lpriority = strtol(prio, &end, 10);
-
-	if (*prio == '\0' || *end != '\0' || lpriority < -20 || lpriority > 19) {
-		log_error("daemon_conf: Unable to parse priority '%s'", prio);
-		return -1;
-	}
-
-	*priorityp = (int)lpriority;
-
-	return 0;
-}
-
-/**
- * Parse a general section value.
- * @param conf Configuration being parsed.
- * @param key Key if associative, whole value if scalar.
- * @param value Value if associative, _NULL_ if scalar.
- * @returns Zero on successful parsing of known value, non-zero else.
- */
-static int
-daemon_conf_parse_general(struct daemon_conf *conf, const char *key, const char *value) {
-	static const char * const keys[] = {
-		"path",
-		"workdir",
-		"user",
-		"group",
-		"umask",
-		"sigfinish",
-		"sigreload",
-		"arguments",
-		"priority"
-	};
-	const char * const *current = keys, * const *keysend = keys + sizeof (keys) / sizeof (*keys);
-	int retval = 0;
-
-	while (current != keysend && strcmp(*current, key) != 0) {
-		current++;
-	}
-
-	if (current != keysend) {
-		if (value != NULL) {
-			switch (current - keys) {
-			case 0: { /* path */
-				char * const newpath = strdup(value);
-
-				if (newpath != NULL) {
-					free(conf->path);
-					conf->path = newpath;
-				} else {
-					retval = -1;
-				}
-			}	break;
-			case 1: /* workdir */
-				if (*value == '/') {
-					char * const workdir = strdup(value);
-
-					if (workdir != NULL) {
-						free(conf->workdir);
-						conf->workdir = workdir;
-						break;
-					}
-				}
-				retval = -1;
-				break;
-			case 2: /* user */
-				retval = daemon_conf_parse_general_uid(value, &conf->uid);
-				break;
-			case 3: /* group */
-				retval = daemon_conf_parse_general_gid(value, &conf->gid);
-				break;
-			case 4: { /* umask */
-				char *valueend;
-				const unsigned long cmask = strtoul(value, &valueend, 8);
-
-				if (*value != '\0' && *valueend == '\0') {
-					conf->umask = cmask & 0x1FF;
-				} else {
-					retval = -1;
-				}
-			}	break;
-			case 5: /* sigfinish */
-				retval = daemon_conf_parse_general_signal(value, &conf->sigfinish);
-				break;
-			case 6: /* sigreload */
-				retval = daemon_conf_parse_general_signal(value, &conf->sigreload);
-				break;
-			case 7: /* arguments */
-				retval = daemon_conf_parse_general_arguments(value, &conf->arguments);
-				break;
-			case 8: /* priority */
-				retval = daemon_conf_parse_general_priority(value, &conf->priority);
-				break;
-			default:
-				retval = -1; /* Invalid state, should not happen */
-				break;
-			}
-		} else {
-			retval = -1; /* No scalar values in general section */
-		}
-	} else {
-		retval = -1; /* Invalid key */
-	}
-
-	return retval;
-}
-
-/**
- * Create an environment array value.
- * @param key Key of the value.
- * @param value Value, or _NULL_.
- * @returns A duplicate string, if @p value is _NULL_ "<key>=<key>", else "<key>=<value>".
- */
-static char *
-daemon_conf_envdup(const char *key, const char *value) {
-	const size_t keylength = strlen(key);
-	size_t valuelength;
-
-	if (value != NULL) {
-		valuelength = strlen(value);
-	} else {
-		valuelength = keylength;
-		value = key;
-	}
-
-	char string[keylength + valuelength + 2];
-
-	memcpy(string, key, keylength);
-	string[keylength - 1] = '='; /* We're safe, as we discarded empty keys earlier */
-	memcpy(string + keylength + 1, value, valuelength + 1);
-
-	return strdup(string);
-}
-
-/**
- * Parse an environment section value.
- * @param conf Configuration being parsed.
- * @param key Key if associative, whole value if scalar.
- * @param value Value if associative, _NULL_ if scalar.
- * @returns Zero on successful parsing of known value, non-zero else.
- */
-static int
-daemon_conf_parse_environment(struct daemon_conf *conf, const char *key, const char *value) {
-	char * const string = daemon_conf_envdup(key, value);
-	int retval = 0;
-
-	if (string != NULL) {
-		if (daemon_conf_list_append(&conf->environment, string) != 0) {
-			free(string);
-			retval = -1;
-		}
-	} else {
-		retval = -1;
-	}
-
-	return retval;
-}
-
-/**
- * Parse a start section value.
- * @param conf Configuration being parsed.
- * @param key Key if associative, whole value if scalar.
- * @param value Value if associative, _NULL_ if scalar.
- * @returns Zero on successful parsing of known value, non-zero else.
- */
-static int
-daemon_conf_parse_start(struct daemon_conf *conf, const char *key, const char *value) {
-	static const char * const keys[] = {
-		"load",
-		"reload",
-		"any exit",
-		"exit",
-		"exit success",
-		"exit failure",
-		"killed",
-		"dumped"
-	};
-	const char * const *current = keys, * const *keysend = keys + sizeof (keys) / sizeof (*keys);
-	int retval = 0;
-
-	while (current != keysend && strcmp(*current, key) != 0) {
-		current++;
-	}
-
-	if (current != keysend) {
-		if (value == NULL) {
-			switch (current - keys) {
-			case 0: /* load */
-				conf->start.load = 1;
-				break;
-			case 1: /* reload */
-				conf->start.reload = 1;
-				break;
-			case 2: /* any exit */
-				conf->start.exitsuccess = 1;
-				conf->start.exitfailure = 1;
-				conf->start.killed = 1;
-				conf->start.dumped = 1;
-				break;
-			case 3: /* exit */
-				conf->start.exitsuccess = 1;
-				conf->start.exitfailure = 1;
-				break;
-			case 4: /* exit success */
-				conf->start.exitsuccess = 1;
-				break;
-			case 5: /* exit failure */
-				conf->start.exitfailure = 1;
-				break;
-			case 6: /* killed */
-				conf->start.killed = 1;
-				break;
-			case 7: /* dumped */
-				conf->start.dumped = 1;
-				break;
-			default:
-				retval = -1; /* Invalid state, should not happen */
-				break;
-			}
-		} else {
-			retval = -1; /* No associative values in start section */
-		}
-	} else {
-		retval = -1; /* Invalid key */
-	}
-
-	return retval;
-}
-
-/**
- * Initializes a configuration for later parsing with defaults.
- * @param conf Configuration to initialize.
- */
-void
-daemon_conf_init(struct daemon_conf *conf) {
-
-	conf->path = NULL;
-	conf->arguments = NULL;
-	conf->environment = NULL;
-	conf->workdir = NULL;
-
-	conf->sigfinish = SIGTERM;
-	conf->sigreload = SIGHUP;
-
-#ifdef NDEBUG
-	conf->uid = 0;
-	conf->gid = 0;
-#else
-	conf->uid = getuid();
-	conf->gid = getgid();
-#endif
-
-	conf->umask = CONFIG_DAEMON_CONF_DEFAULT_UMASK;
-	conf->priority = 0;
-
-	conf->start.load = 0;
-	conf->start.reload = 0;
-	conf->start.exitsuccess = 0;
-	conf->start.exitfailure = 0;
-	conf->start.killed = 0;
-	conf->start.dumped = 0;
-}
-
-/**
- * Deinitializes a configuration, freeing all used data.
- * @param conf Configuration to deinitialize.
- */
-void
-daemon_conf_deinit(struct daemon_conf *conf) {
-	free(conf->path);
-	free(conf->workdir);
-	daemon_conf_list_free(conf->arguments);
-	daemon_conf_list_free(conf->environment);
-}
+static const struct daemon_conf_section sections[] = {
+	{ general_values,     "general" }, /* First one is defaut, begin in general section */
+	{ environment_values, "environment" },
+	{ start_values,       "start" },
+};
 
 /**
  * Tries parsing a daemon_conf from a file.
@@ -642,61 +790,53 @@ daemon_conf_deinit(struct daemon_conf *conf) {
  */
 int
 daemon_conf_parse(struct daemon_conf *conf, FILE *filep) {
-	enum daemon_conf_section section = SECTION_GENERAL;
-	size_t linecap = 0;
+	const struct daemon_conf_section *section = sections;
 	char *line = NULL;
-	int retval = 0;
-	ssize_t length;
+	size_t n = 0;
 
-	while (length = getline(&line, &linecap, filep), length >= 0) {
+	ssize_t length;
+	while (length = getline(&line, &n, filep), length >= 0) {
 		const char *key, *value;
+		int i;
 
 		if (daemon_conf_parse_line(line, length, &key, &value) == 0) {
-			static const char * const sections[] = {
-				[SECTION_GENERAL]     = "general",
-				[SECTION_ENVIRONMENT] = "environment",
-				[SECTION_START]       = "start",
-			};
-			const char * const *current = sections, * const *sectionsend = sections + sizeof (sections) / sizeof (*sections);
+			/* Section specifier */
 
-			static_assert(sizeof (sections) / sizeof (*sections) == SECTION_UNKNOWN, "Missing section description");
-
-			while (current != sectionsend && strcmp(*current, key) != 0) {
-				current++;
+			i = 0;
+			while (i < sizeof (sections) / sizeof (*sections) && strcmp(sections[i].name, key) != 0) {
+				i++;
 			}
 
-			/* SECTION_UNKNOWN being the next after the last, it corresponds to sectionsend */
-			section = current - sections;
-
-		} else if (*key != '\0') { /* We don't take empty keys */
-			switch (section) {
-			case SECTION_GENERAL:
-				if (daemon_conf_parse_general(conf, key, value) != 0) {
-					retval = -1;
-				}
-				break;
-			case SECTION_ENVIRONMENT:
-				if (daemon_conf_parse_environment(conf, key, value) != 0) {
-					retval = -1;
-				}
-				break;
-			case SECTION_START:
-				if (daemon_conf_parse_start(conf, key, value) != 0) {
-					retval = -1;
-				}
-				break;
-			case SECTION_UNKNOWN:
-				break;
+			if (i < sizeof (sections) / sizeof (*sections)) {
+				section = sections + i;
+			} else {
+				section = NULL;
 			}
+			continue;
+		}
+
+		if (*key == '\0') {
+			/* Don't take empty keys */
+			continue;
+		}
+
+		i = 0;
+		while (section->values[i].key != NULL && strcmp(section->values[i].key, key) != 0) {
+			i++;
+		}
+
+		if (section->values[i].parse != NULL
+			&& section->values[i].parse(conf, key, value) != 0) {
+			syslog(LOG_ERR, "daemon_conf: Error while parsing key '%s' of section '%s' for value '%s'", key, section->name, value);
 		}
 	}
 
 	free(line);
 
 	if (conf->path == NULL) {
-		log_error("daemon_conf: Missing binary executable path");
-		retval = -1;
+		syslog(LOG_ERR, "daemon_conf: Missing binary executable path");
+		return -1;
 	}
 
-	return retval;
+	return 0;
 }

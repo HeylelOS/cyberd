@@ -11,12 +11,16 @@ struct daemon_conf {
 	char **arguments; /**< Command line arguments, including process name */
 	char **environment; /**< Command line environment variables */
 	char *workdir; /**< Working directory of the process */
+	char *in; /**< Standard input of the process */
+	char *out; /**< Standard output of the process */
+	char *err; /**< Standard error of the process */
 
 	int sigfinish; /**< Signal used to terminate the process, default SIGTERM */
 	int sigreload; /**< Signal used to reload the process configuration, default SIGHUP */
 
 	uid_t uid; /**< User-id the process wil be executed with */
 	gid_t gid; /**< Group-id the process will be executed with */
+	unsigned int nosid : 1; /**< Do not setsid when the process is forked */
 
 	mode_t umask; /**< umask of the daemon */
 	int priority; /**< Scheduling priority of the daemon */

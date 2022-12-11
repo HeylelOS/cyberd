@@ -3,10 +3,11 @@
 
 #include "configuration.h"
 #include "spawns.h"
-#include "log.h"
 
+#include <stdlib.h> /* abort */
 #include <sys/reboot.h> /* reboot, RB_POWER_OFF, ... */
 #include <sys/wait.h> /* waitid, ... */
+#include <syslog.h> /* syslog */
 #include <assert.h> /* static_assert */
 #include <errno.h> /* errno */
 
@@ -42,11 +43,11 @@ sigterm_handler(int, siginfo_t *siginfo, void *) {
 			break;
 		case RB_SW_SUSPEND:
 			if (reboot(RB_SW_SUSPEND) != 0) {
-				log_error("sigterm: reboot(RB_SW_SUSPEND): %m");
+				syslog(LOG_ERR, "sigterm: reboot(RB_SW_SUSPEND): %m");
 			}
 			break;
 		default:
-			log_error("sigterm: Invalid reboot magic 0x%.8X", value);
+			syslog(LOG_ERR, "sigterm: Invalid reboot magic 0x%.8X", value);
 		}
 	} else {
 		signals_requested_reboot = RB_POWER_OFF;
@@ -71,7 +72,7 @@ sigchld_handler(int) {
 		case CLD_EXITED:
 			if (daemon != NULL) {
 				daemon->state = DAEMON_STOPPED;
-				log_info("sigchld: '%s' (pid: %d) terminated with exit status %d", daemon->name, info.si_pid, info.si_status);
+				syslog(LOG_INFO, "sigchld: '%s' (pid: %d) terminated with exit status %d", daemon->name, info.si_pid, info.si_status);
 
 				if (info.si_status == 0) {
 					if (daemon->conf.start.exitsuccess == 1) {
@@ -81,46 +82,40 @@ sigchld_handler(int) {
 					daemon_start(daemon);
 				}
 			} else {
-				log_info("sigchld: Orphan %d terminated with exit status %d", info.si_pid, info.si_status);
+				syslog(LOG_INFO, "sigchld: Orphan %d terminated with exit status %d", info.si_pid, info.si_status);
 			}
 			break;
 		case CLD_KILLED:
 			if (daemon != NULL) {
 				daemon->state = DAEMON_STOPPED;
-				log_info("sigchld: '%s' (pid: %d) killed by signal %d", daemon->name, info.si_pid, info.si_status);
+				syslog(LOG_INFO, "sigchld: '%s' (pid: %d) killed by signal %d", daemon->name, info.si_pid, info.si_status);
 
 				if (daemon->conf.start.killed == 1) {
 					daemon_start(daemon);
 				}
 			} else {
-				log_info("sigchld: Orphan %d killed by signal %d", info.si_pid, info.si_status);
+				syslog(LOG_INFO, "sigchld: Orphan %d killed by signal %d", info.si_pid, info.si_status);
 			}
 			break;
 		case CLD_DUMPED:
 			if (daemon != NULL) {
 				daemon->state = DAEMON_STOPPED;
-				log_info("sigchld: '%s' (pid: %d) dumped core", daemon->name, info.si_pid);
+				syslog(LOG_INFO, "sigchld: '%s' (pid: %d) dumped core", daemon->name, info.si_pid);
 
 				if (daemon->conf.start.dumped == 1) {
 					daemon_start(daemon);
 				}
 			} else {
-				log_info("sigchld: Orphan %d dumped core", info.si_pid);
+				syslog(LOG_INFO, "sigchld: Orphan %d dumped core", info.si_pid);
 			}
 			break;
-		default: /* This one should never happen, but whatever */
-			if (daemon != NULL) {
-				daemon->state = DAEMON_STOPPED;
-				log_info("sigchld: '%s' (pid: %d) exited", daemon->name, info.si_pid);
-			} else {
-				log_info("sigchld: Orphan %d exited", info.si_pid);
-			}
-			break;
+		default:
+			abort();
 		}
 	}
 
 	if (errno != 0) {
-		log_error("sigchld waitid: %m");
+		syslog(LOG_ERR, "sigchld waitid: %m");
 	}
 }
 
@@ -145,9 +140,6 @@ signals_setup(sigset_t *sigmaskp) {
 	/* Define blocked signals when not in pselect(2) */
 	sigemptyset(sigmaskp);
 	sigaddset(sigmaskp, SIGTERM);
-#ifndef NDEBUG
-	sigaddset(sigmaskp, SIGINT);
-#endif
 	sigaddset(sigmaskp, SIGHUP);
 	sigaddset(sigmaskp, SIGCHLD);
 	sigprocmask(SIG_SETMASK, sigmaskp, NULL);
@@ -158,9 +150,6 @@ signals_setup(sigset_t *sigmaskp) {
 	action.sa_flags = SA_SIGINFO;
 	action.sa_sigaction = sigterm_handler;
 	sigaction(SIGTERM, &action, NULL);
-#ifndef NDEBUG
-	sigaction(SIGINT, &action, NULL);
-#endif
 
 	action.sa_flags = SA_RESTART;
 
@@ -173,9 +162,6 @@ signals_setup(sigset_t *sigmaskp) {
 	/* Define pselect's non blocked signals */
 	sigfillset(sigmaskp);
 	sigdelset(sigmaskp, SIGTERM);
-#ifndef NDEBUG
-	sigdelset(sigmaskp, SIGINT);
-#endif
 	sigdelset(sigmaskp, SIGHUP);
 	sigdelset(sigmaskp, SIGCHLD);
 }
