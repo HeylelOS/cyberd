@@ -13,9 +13,9 @@
 
 /**
  * Requested reboot action. Used in `src/cyberd/main.c` to check whether
- * termination is requested. Holds to value to use with _reboot(2)_.
+ * termination is requested. Holds the value to use with _reboot(2)_.
  */
-int signals_requested_reboot;
+int rebootcmd;
 
 /**
  * SIGTERM. Checks for additional informations from a potential _sigqueue(2)_
@@ -38,19 +38,15 @@ sigterm_handler(int, siginfo_t *siginfo, void *) {
 		switch (value) {
 		case RB_AUTOBOOT:    [[fallthrough]];
 		case RB_HALT_SYSTEM: [[fallthrough]];
-		case RB_POWER_OFF:
-			signals_requested_reboot = value;
-			break;
+		case RB_POWER_OFF:   [[fallthrough]];
 		case RB_SW_SUSPEND:
-			if (reboot(RB_SW_SUSPEND) != 0) {
-				syslog(LOG_ERR, "sigterm: reboot(RB_SW_SUSPEND): %m");
-			}
+			rebootcmd = value;
 			break;
 		default:
 			syslog(LOG_ERR, "sigterm: Invalid reboot magic 0x%.8X", value);
 		}
 	} else {
-		signals_requested_reboot = RB_POWER_OFF;
+		rebootcmd = RB_POWER_OFF;
 	}
 }
 

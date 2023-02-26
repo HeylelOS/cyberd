@@ -4,7 +4,7 @@
 
 #include <signal.h> /* sigset_t */
 
-extern int signals_requested_reboot;
+extern int rebootcmd;
 
 void
 signals_setup(sigset_t *sigmaskp);

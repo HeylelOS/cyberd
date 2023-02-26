@@ -159,7 +159,7 @@ teardown(void) {
 	 * note: Standard specifies it may return before all syncs done */
 	sync();
 
-	reboot(signals_requested_reboot);
+	reboot(rebootcmd);
 	/* We reached an error */
 	exit(EXIT_FAILURE);
 }
@@ -176,7 +176,7 @@ main(int argc, char **argv) {
 
 	setup(argc, argv, &sigmask);
 
-	while (!signals_requested_reboot) {
+	while (!rebootcmd) {
 		fd_set *readfds, *writefds, *exceptfds;
 		int fds = socket_switch_prepare(&readfds, &writefds, &exceptfds);
 
@@ -187,6 +187,13 @@ main(int argc, char **argv) {
 			socket_switch_operate(fds);
 		} else if (errno != EINTR) {
 			syslog(LOG_ERR, "pselect: %m");
+		}
+
+		if (rebootcmd == RB_SW_SUSPEND) {
+			if (reboot(RB_SW_SUSPEND) != 0) {
+				syslog(LOG_ERR, "reboot(RB_SW_SUSPEND): %m");
+			}
+			rebootcmd = 0;
 		}
 	}
 
