@@ -11,9 +11,9 @@ configuration_load(const char *path);
 void
 configuration_reload(void);
 
-#ifdef CONFIG_MEMORY_CLEANUP
+#ifndef NDEBUG
 void
-configuration_teardown(void);
+configuration_cleanup(void);
 #endif
 
 /* CONFIGURATION_H */

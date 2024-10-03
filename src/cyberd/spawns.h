@@ -2,27 +2,26 @@
 #ifndef SPAWNS_H
 #define SPAWNS_H
 
-#include "daemon.h"
+#include <sys/types.h> /* pid_t */
 
-#include <stdbool.h>
-
-void
-spawns_init(void);
-
-void
-spawns_stop(void);
-
-bool
-spawns_empty(void);
-
-void
-spawns_end(void);
+struct daemon;
 
 void
 spawns_record(struct daemon *daemon);
 
 struct daemon *
 spawns_retrieve(pid_t pid);
+
+bool
+spawns_empty(void);
+
+void
+spawns_stop(void);
+
+#ifndef NDEBUG
+void
+spawns_cleanup(void);
+#endif
 
 /* SPAWNS_H */
 #endif

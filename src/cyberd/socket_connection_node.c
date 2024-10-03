@@ -9,7 +9,6 @@
 #include "daemon.h"
 
 #include <stdlib.h> /* malloc, realloc, free */
-#include <stdbool.h> /* bool */
 #include <string.h> /* memchr */
 #include <signal.h> /* sigqueue */
 #include <syslog.h> /* syslog */
@@ -35,7 +34,7 @@ struct parser {
 		union {
 			struct {
 				uint32_t word; /**< Previously parsed bytes */
-				unsigned int size; /**< How many bytes did we already parsed. */
+				unsigned int size; /**< How many bytes already parsed. */
 			} restricted;
 			struct {
 				capset_t restricted; /**< Previously parsed restricted capabilities set. */
@@ -56,10 +55,6 @@ struct socket_connection_node {
 	struct parser parser;
 };
 
-/*******************************************
- * Filesystem path component buffer helper *
- *******************************************/
-
 /******************************
  * Connection commands parser *
  ******************************/
@@ -67,10 +62,9 @@ struct socket_connection_node {
 static inline void
 queue_reboot(int howto) {
 	const union sigval value = { .sival_int = howto };
-	const pid_t pid = getpid(); /* pid should always be 1, but who knows... */
 
-	if (sigqueue(pid, SIGTERM, value) != 0) {
-		syslog(LOG_ERR, "socket_connection_node: sigqueue(0x%.8X): %m", howto);
+	if (sigqueue(getpid(), SIGTERM, value) != 0) {
+		syslog(LOG_ERR, "socket_connection_node: sigqueue(%#.8x): %m", howto);
 	}
 }
 
@@ -119,7 +113,7 @@ name_fill(const char **inp, size_t *inlenp, char *out, unsigned int *outlenp) {
 	const size_t len = nul != NULL ? (nul - in + 1) : inlen;
 	const size_t outlen = *outlenp + len;
 
-	if (outlen > NAME_MAX || memchr(in, '/', len) != NULL) {
+	if (outlen > NAME_MAX + 1 || memchr(in, '/', len) != NULL) {
 		return -1;
 	}
 
@@ -179,7 +173,7 @@ parser_feed(struct parser *parser, const char *buffer, size_t count) {
 	while (count != 0) {
 		switch (parser->state) {
 		case PARSER_STATE_COMMAND:
-			parser_feed_command(parser, 1 << (unsigned int)*buffer);
+			parser_feed_command(parser, (capset_t)1 << (unsigned int)*buffer);
 			buffer++;
 			count--;
 			break;
@@ -213,10 +207,8 @@ static void
 socket_connection_node_operate(struct socket_node *snode) {
 	struct socket_connection_node * const connection = (struct socket_connection_node *)snode;
 	char buffer[CONFIG_SOCKET_CONNECTIONS_BUFFER_SIZE];
-	ssize_t readval;
 
-	readval = read(connection->super.fd, buffer, sizeof (buffer));
-
+	const ssize_t readval = read(connection->super.fd, buffer, sizeof (buffer));
 	switch (readval) {
 	case -1:
 		syslog(LOG_ERR, "socket_connection_node_operate: read: %m");
@@ -232,7 +224,6 @@ socket_connection_node_operate(struct socket_node *snode) {
 static void
 socket_connection_node_destroy(struct socket_node *snode) {
 	struct socket_connection_node * const connection = (struct socket_connection_node *)snode;
-
 	close(connection->super.fd);
 	free(connection);
 }
@@ -245,12 +236,14 @@ socket_connection_node_create(int fd, capset_t capabilities) {
 	};
 	struct socket_connection_node * const connection = malloc(sizeof (*connection));
 
-	if (connection != NULL) {
-		connection->super.class = &socket_connection_node_class;
-		connection->super.fd = fd;
-		connection->parser.capabilities = capabilities;
-		connection->parser.state = PARSER_STATE_COMMAND;
+	if (connection == NULL) {
+		return NULL;
 	}
+
+	connection->super.class = &socket_connection_node_class;
+	connection->super.fd = fd;
+	connection->parser.capabilities = capabilities;
+	connection->parser.state = PARSER_STATE_COMMAND;
 
 	return &connection->super;
 }

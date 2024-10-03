@@ -4,15 +4,15 @@
 
 #include <stdint.h> /* uint32_t */
 
-#define CAPABILITY_ENDPOINT_CREATE (1 << 0)
-#define CAPABILITY_DAEMON_START    (1 << 1)
-#define CAPABILITY_DAEMON_STOP     (1 << 2)
-#define CAPABILITY_DAEMON_RELOAD   (1 << 3)
-#define CAPABILITY_DAEMON_END      (1 << 4)
-#define CAPABILITY_SYSTEM_POWEROFF (1 << 5)
-#define CAPABILITY_SYSTEM_HALT     (1 << 6)
-#define CAPABILITY_SYSTEM_REBOOT   (1 << 7)
-#define CAPABILITY_SYSTEM_SUSPEND  (1 << 8)
+#define CAPABILITY_ENDPOINT_CREATE ((capset_t)1 << 0)
+#define CAPABILITY_DAEMON_START    ((capset_t)1 << 1)
+#define CAPABILITY_DAEMON_STOP     ((capset_t)1 << 2)
+#define CAPABILITY_DAEMON_RELOAD   ((capset_t)1 << 3)
+#define CAPABILITY_DAEMON_END      ((capset_t)1 << 4)
+#define CAPABILITY_SYSTEM_POWEROFF ((capset_t)1 << 5)
+#define CAPABILITY_SYSTEM_HALT     ((capset_t)1 << 6)
+#define CAPABILITY_SYSTEM_REBOOT   ((capset_t)1 << 7)
+#define CAPABILITY_SYSTEM_SUSPEND  ((capset_t)1 << 8)
 
 #define CAPSET_ALL ((CAPABILITY_SYSTEM_SUSPEND << 1) - 1)
 

@@ -6,7 +6,7 @@ Each endpoint has an associated set of capabilities. Those capabilities determin
 
 ## Components
 
-Messages are binary coded, and can be composed of the following items:
+Messages are binary coded, and can be composed of the following components:
 
 |   Component    |                             Format                           |
 |----------------|--------------------------------------------------------------|
@@ -18,15 +18,15 @@ Messages are binary coded, and can be composed of the following items:
 
 The available messages are the following:
 
-| Message         | Description                     | First component (command) | Second component        | Third component |
-|-----------------|---------------------------------|---------------------------|-------------------------|-----------------|
-| Create endpoint | Create a new dedicated endpoint |             0             | Restricted capabilities |      Name       |
-| Start daemon    | Start a daemon                  |             1             |           Name          |                 |
-| Stop daemon     | Stop a daemon                   |             2             |           Name          |                 |
-| Reload daemon   | Reload a daemon                 |             3             |           Name          |                 |
-| End daemon      | End a daemon                    |             4             |           Name          |                 |
-| System poweroff | Poweroff the system             |             5             |           Name          |                 |
-| System halt     | Halt the system                 |             6             |                         |                 |
-| System reboot   | Reboot the system               |             7             |                         |                 |
-| System suspend  | Suspend the system              |             8             |                         |                 |
+| Message         | Description                     | First component (command) | Second component | Third component |
+|-----------------|---------------------------------|---------------------------|------------------|-----------------|
+| Create endpoint | Create a new dedicated endpoint |             0             |  Capability Set  |      Name       |
+| Start daemon    | Start a daemon                  |             1             |       Name       |                 |
+| Stop daemon     | Stop a daemon                   |             2             |       Name       |                 |
+| Reload daemon   | Reload a daemon                 |             3             |       Name       |                 |
+| End daemon      | End a daemon                    |             4             |       Name       |                 |
+| System poweroff | Poweroff the system             |             5             |       Name       |                 |
+| System halt     | Halt the system                 |             6             |                  |                 |
+| System reboot   | Reboot the system               |             7             |                  |                 |
+| System suspend  | Suspend the system              |             8             |                  |                 |
 

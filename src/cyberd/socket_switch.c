@@ -58,7 +58,7 @@ socket_switch_destroy_element(tree_element_t *element) {
 void
 socket_switch_teardown(void) {
 	tree_mutate(&socket_switch.snodes, socket_switch_destroy_element);
-#ifdef CONFIG_MEMORY_CLEANUP
+#ifndef NDEBUG
 	tree_deinit(&socket_switch.snodes);
 #endif
 }
@@ -84,18 +84,14 @@ socket_switch_remove(struct socket_node *snode) {
 /**
  * Prepare the file descriptor sets for _pselect(2)_.
  * @param[out] readfdsp
- * @param[out] writefdsp
- * @param[out] exceptfdsp
  * @returns Maximum file descriptor value, or zero if none in the switch.
  */
 int
-socket_switch_prepare(fd_set **readfdsp, fd_set **writefdsp, fd_set **exceptfdsp) {
+socket_switch_prepare(fd_set **readfdsp) {
 	const struct socket_node *snode;
 	int nfds;
 
 	*readfdsp = memcpy(&socket_switch.readset, &socket_switch.activeset, sizeof (**readfdsp));
-	*writefdsp = NULL;
-	*exceptfdsp = NULL;
 
 	snode = tree_last(&socket_switch.snodes);
 	if (snode != NULL) {
@@ -127,12 +123,11 @@ void
 socket_switch_operate(int nfds) {
 
 	for (int fd = 0; fd < FD_SETSIZE && nfds != 0; fd++) {
-		if (FD_ISSET(fd, &socket_switch.readset)) {
-			struct socket_node * const snode = socket_switch_find(fd);
-
-			snode->class->operate(snode);
-
-			nfds--;
+		if (!FD_ISSET(fd, &socket_switch.readset)) {
+			continue;
 		}
+		struct socket_node * const snode = socket_switch_find(fd);
+		snode->class->operate(snode);
+		nfds--;
 	}
 }

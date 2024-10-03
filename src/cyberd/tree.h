@@ -21,7 +21,6 @@ struct tree {
 static inline void
 tree_deinit(struct tree *tree) {
 	extern void tree_node_destroy(struct tree_node *node);
-
 	tree_node_destroy(tree->root);
 }
 
@@ -33,7 +32,6 @@ tree_deinit(struct tree *tree) {
 static inline void
 tree_mutate(struct tree *tree, void (* const mutate)(tree_element_t *element)) {
 	extern void tree_node_preorder_mutate(struct tree_node *node, void (* const mutate)(tree_element_t *element));
-
 	tree_node_preorder_mutate(tree->root, mutate);
 }
 
@@ -46,7 +44,6 @@ static inline void
 tree_insert(struct tree *tree, tree_element_t *element) {
 	extern struct tree_node * tree_node_create(tree_element_t *element);
 	extern void tree_node_insert(struct tree_node **rootp, struct tree_node *node, int (* const compare)(const tree_element_t *, const tree_element_t *));
-
 	tree_node_insert(&tree->root, tree_node_create(element), tree->compare);
 }
 

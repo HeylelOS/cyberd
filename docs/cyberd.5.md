@@ -22,9 +22,9 @@ Comments can start anywhere on a line with the '#' character, ending on the end 
 - **priority=\<priority\>**: Priority of the newly created daemon, must be between -20 and 19 inclusive, defaults to 0.
 - **sigfinish=\<signal name|signal number\>**: Signal used to terminate the daemon, defaults to SIGTERM.
 - **sigreload=\<signal name|signal number\>**: Signal used to reload the daemon's configuration, defaults to SIGHUP.
-- **stdin=\<absolute path\>**: Absolute path of a file opened read-only has stdin, defaults to /dev/null.
-- **stdout=\<absolute path\>**: Absolute path of a file opened write-only (no truncate, append nor creat) has stdout, defaults to /dev/null.
-- **stderr=\<absolute path\>**: Absolute path of a file opened write-only (no truncate, append nor creat) has stderr, if not specified, stderr is a dup(2) of stdout.
+- **stdin=\<absolute path\>**: Absolute path of a file opened read-only as stdin, defaults to /dev/null.
+- **stdout=\<absolute path\>**: Absolute path of a file opened write-only (no truncate, append nor creat) as stdout, defaults to /dev/null.
+- **stderr=\<absolute path\>**: Absolute path of a file opened write-only (no truncate, append nor creat) as stderr, if not specified, stderr is a dup(2) of stdout.
 - **umask=\<octal numeric value\>**: umask of the daemon, defaults to cyberd's one (022).
 - **user=\<name|id\>**: User name/id of the daemon, defaults to 0.
 - **workdir=\<absolute path\>**: Where the daemon will be executed (chdir()'d), defaults to /.
@@ -47,4 +47,3 @@ Valentin Debon (valentin.debon@heylelos.org)
 
 # SEE ALSO
 cyberctl(1), cyberd(8), isspace(3), chdir(2), umask(2), signal(7).
-

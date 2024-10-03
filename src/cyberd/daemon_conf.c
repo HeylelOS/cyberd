@@ -1,18 +1,24 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 #include "daemon_conf.h"
 
-#include <stdlib.h> /* realloc, free, strtol, ... */
+#include <stdlib.h> /* abort, free, realloc, ... */
 #include <signal.h> /* SIGABRT, ... */
-#include <string.h> /* strlen, strdup */
+#include <string.h> /* memcpy, strdup, ... */
+#include <strings.h> /* strcasecmp, ... */
 #include <syslog.h> /* syslog */
-#include <unistd.h> /* getuid, getgid */
-#include <limits.h> /* INT_MAX */
+#include <alloca.h> /* alloca */
 #include <ctype.h> /* isspace, isdigit */
 #include <pwd.h> /* getpwnam */
 #include <grp.h> /* getgrnam */
 #include <errno.h> /* errno */
 
-/** Helper macro to describe a signal */
+#ifndef NSIG
+#include <limits.h> /* INT_MAX */
+/* For platforms without NSIG, just avoid overflows on parsing. */
+#define NSIG INT_MAX
+#endif
+
+/** Helper macro to describe a signal. */
 #define SIGNAL_DESCRIPTION(desc) { SIG##desc, #desc }
 
 struct daemon_conf_value {
@@ -41,7 +47,7 @@ daemon_conf_list_append(char ***listp, const char *string) {
 	unsigned int len;
 
 	if (str == NULL) {
-		return -1;
+		goto strdup_failure;
 	}
 
 	if (list != NULL) {
@@ -52,8 +58,7 @@ daemon_conf_list_append(char ***listp, const char *string) {
 
 	list = realloc(list, (len + 2) * sizeof (*list));
 	if (list == NULL) {
-		free(str);
-		return -1;
+		goto realloc_failure;
 	}
 
 	list[len] = str;
@@ -62,6 +67,10 @@ daemon_conf_list_append(char ***listp, const char *string) {
 	*listp = list;
 
 	return 0;
+realloc_failure:
+	free(str);
+strdup_failure:
+	return -1;
 }
 
 /**
@@ -72,11 +81,9 @@ static void
 daemon_conf_list_free(char **list) {
 
 	if (list != NULL) {
-
 		for (unsigned int i = 0; list[i] != NULL; i++) {
 			free(list[i]);
 		}
-
 		free(list);
 	}
 }
@@ -163,14 +170,11 @@ daemon_conf_signal(const char *signame, int *signop) {
 	}
 
 	if (isdigit(*signame)) {
-
 		lsigno = strtoul(signame, &end, 10);
-		if (*end != '\0' || lsigno > INT_MAX) {
+		if (*end != '\0' || lsigno > NSIG) {
 			return -1;
 		}
-
 		*signop = (int)lsigno;
-
 		return 0;
 	}
 
@@ -180,19 +184,18 @@ daemon_conf_signal(const char *signame, int *signop) {
 
 #ifdef CONFIG_DAEMON_CONF_HAS_RTSIG
 	if (strncasecmp("RT", signame, 2) == 0) {
-
 		lsigno = strtoul(signame + 2, &end, 10);
 		if (*end != '\0' || lsigno > (SIGRTMAX - SIGRTMIN)) {
 			return -1;
 		}
-
 		*signop = (int)lsigno + SIGRTMIN;
 		return 0;
 	}
 #endif
 
 	i = 0;
-	while (i < sizeof (signals) / sizeof (*signals) && strcasecmp(signals[i].name, signame) != 0) {
+	while (i < sizeof (signals) / sizeof (*signals)
+		&& strcasecmp(signals[i].name, signame) != 0) {
 		i++;
 	}
 
@@ -222,7 +225,7 @@ daemon_conf_parse_general_arguments(struct daemon_conf *conf, const char *key, c
 		return -1;
 	}
 
-	{ /* Make a local copy of value for in-place expansion */
+	{ /* Make a local copy of value for in-place expansion. */
 		const size_t size = strlen(value) + 1;
 		it = memcpy(alloca(size), value, size);
 	}
@@ -319,11 +322,11 @@ daemon_conf_parse_general_group(struct daemon_conf *conf, const char *key, const
 	}
 
 	if (errno == 0) {
-		/* No entry found, treat as decimal gid */
+		/* No entry found, treat as decimal gid. */
 		char *end;
 		const unsigned long lgid = strtoul(value, &end, 10);
 
-		if (*end != '\0' || lgid >= CONFIG_DAEMON_CONF_MAX_GID) {
+		if (*end != '\0' || lgid > CONFIG_DAEMON_CONF_MAX_GID) {
 			return -1;
 		}
 
@@ -407,7 +410,7 @@ daemon_conf_parse_general_umask(struct daemon_conf *conf, const char *key, const
 		return -1;
 	}
 
-	conf->umask = (mode_t)(cmask & 0x1FF);
+	conf->umask = (mode_t)(cmask & 0x1ff);
 
 	return 0;
 }
@@ -429,11 +432,11 @@ daemon_conf_parse_general_user(struct daemon_conf *conf, const char *key, const 
 	}
 
 	if (errno == 0) {
-		/* No entry found, treat as decimal uid */
+		/* No entry found, treat as decimal uid. */
 		char *end;
 		const unsigned long luid = strtoul(value, &end, 10);
 
-		if (*end != '\0' || luid >= CONFIG_DAEMON_CONF_MAX_UID) {
+		if (*end != '\0' || luid > CONFIG_DAEMON_CONF_MAX_UID) {
 			return -1;
 		}
 
@@ -451,33 +454,6 @@ daemon_conf_parse_general_workdir(struct daemon_conf *conf, const char *key, con
 /*****************************
  * Parse environment section *
  *****************************/
-
-/**
- * Create an environment array value.
- * @param key Key of the value.
- * @param value Value, or _NULL_.
- * @returns A duplicate string, if @p value is _NULL_ "<key>=<key>", else "<key>=<value>".
- */
-static char *
-daemon_conf_envdup(const char *key, const char *value) {
-	const size_t keylength = strlen(key);
-	size_t valuelength;
-
-	if (value != NULL) {
-		valuelength = strlen(value);
-	} else {
-		valuelength = keylength;
-		value = key;
-	}
-
-	char string[keylength + valuelength + 2];
-
-	memcpy(string, key, keylength);
-	string[keylength - 1] = '='; /* We're safe, as we discarded empty keys earlier */
-	memcpy(string + keylength + 1, value, valuelength + 1);
-
-	return strdup(string);
-}
 
 /**
  * Parse an environment section value.
@@ -669,37 +645,37 @@ daemon_conf_deinit(struct daemon_conf *conf) {
 static int
 daemon_conf_parse_line(char *line, size_t length, const char **keyp, const char **valuep) {
 
-	{ /* Trimming and comment exclusion */
-		/* Shorten up to the comment if there is one */
+	{ /* Trimming and comment exclusion. */
+		/* Shorten up to the comment if there is one. */
 		const char * const comment = strchr(line, '#');
 		if (comment != NULL) {
 			length = comment - line;
 		}
 
-		/* Trim the beginning */
+		/* Trim the beginning. */
 		while (isspace(*line)) {
 			length--;
 			line++;
 		}
 
-		/* Trim the end */
+		/* Trim the end. */
 		while (isspace(line[length - 1])) {
 			length--;
 		}
 
 		/* If there wasn't anything to end-trim, no problem,
-		 * we are just replacing the previous nul delimiter */
+		 * we are just replacing the previous nul delimiter. */
 		line[length] = '\0';
 	}
 
-	if (*line == '[' && line[length - 1] == ']') { /* Section delimiter */
-		/* Trim begnning of section name */
+	if (*line == '[' && line[length - 1] == ']') { /* Section delimiter. */
+		/* Trim begnning of section name. */
 		do {
 			length--;
 			line++;
 		} while (isspace(*line));
 
-		/* Trim end of section name */
+		/* Trim end of section name. */
 		do {
 			length--;
 		} while (isspace(line[length - 1]));
@@ -708,16 +684,16 @@ daemon_conf_parse_line(char *line, size_t length, const char **keyp, const char 
 		*keyp = line;
 
 		return 0;
-	} else { /* Scalar or associative value */
-		/* Assign to key */
+	} else { /* Scalar or associative value. */
+		/* Assign to key. */
 		*keyp = line;
 
-		/* Assign to value */
+		/* Assign to value. */
 		char *separator = strchr(line, '=');
 		if (separator != NULL) {
 			char *preseparator = separator - 1;
 
-			/* Trim the end of key */
+			/* Trim the end of key. */
 			if (preseparator != line) {
 				while (isspace(*preseparator)) {
 					preseparator--;
@@ -725,7 +701,7 @@ daemon_conf_parse_line(char *line, size_t length, const char **keyp, const char 
 			}
 			preseparator[1] = '\0';
 
-			/* Trim the beginning of value */
+			/* Trim the beginning of value. */
 			do {
 				separator++;
 			} while (isspace(*separator));
@@ -777,7 +753,7 @@ static const struct daemon_conf_value start_values[] = {
  * depending on whether the given value parameter is NULL.
  */
 static const struct daemon_conf_section sections[] = {
-	{ general_values,     "general" }, /* First one is defaut, begin in general section */
+	{ general_values,     "general" }, /* First one is defaut, begin in general section. */
 	{ environment_values, "environment" },
 	{ start_values,       "start" },
 };
@@ -800,7 +776,7 @@ daemon_conf_parse(struct daemon_conf *conf, FILE *filep) {
 		int i;
 
 		if (daemon_conf_parse_line(line, length, &key, &value) == 0) {
-			/* Section specifier */
+			/* Section specifier. */
 
 			i = 0;
 			while (i < sizeof (sections) / sizeof (*sections) && strcmp(sections[i].name, key) != 0) {
@@ -815,8 +791,9 @@ daemon_conf_parse(struct daemon_conf *conf, FILE *filep) {
 			continue;
 		}
 
-		if (*key == '\0') {
-			/* Don't take empty keys */
+		/* Skip if section is not valid,
+		 * or if the key is an empty one. */
+		if (section == NULL || *key == '\0') {
 			continue;
 		}
 

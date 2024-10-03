@@ -1,10 +1,10 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 #include "spawns.h"
 
+#include "daemon.h"
 #include "tree.h"
 
 #include <syslog.h> /* syslog */
-#include <sys/wait.h> /* waitpid */
 
 /**
  * Spawns tree comparison function. Identifies by the daemon's pid.
@@ -15,7 +15,6 @@
 static int
 spawns_compare_function(const tree_element_t *lhs, const tree_element_t *rhs) {
 	const struct daemon * const ldaemon = lhs, * const rdaemon = rhs;
-
 	return ldaemon->pid - rdaemon->pid;
 }
 
@@ -28,6 +27,35 @@ spawns_compare_function(const tree_element_t *lhs, const tree_element_t *rhs) {
  * This storage is indexed using the daemon's pid as identifiers. All daemon should be in a non-@ref DAEMON_STOPPED state.
  */
 static struct tree spawns = { .compare = spawns_compare_function };
+
+/**
+ * Register a running daemon.
+ * @param daemon A daemon which must not be @ref DAEMON_STOPPED.
+ */
+void
+spawns_record(struct daemon *daemon) {
+	tree_insert(&spawns, daemon);
+}
+
+/**
+ * Retrieve a spawned daemon.
+ * @param pid Pid of the running daemon, if any is associated.
+ * @returns The daemon if spawned, _NULL_ if none found.
+ */
+struct daemon *
+spawns_retrieve(pid_t pid) {
+	const struct daemon element = { .pid = pid };
+	return tree_remove(&spawns, &element);
+}
+
+/**
+ * Check if there are no more daemons left.
+ * @returns true if empty, false else.
+ */
+bool
+spawns_empty(void) {
+	return spawns.root == NULL;
+}
 
 /**
  * Deactivate possible respawns, and politely ask for termination.
@@ -54,61 +82,9 @@ spawns_stop(void) {
 	tree_mutate(&spawns, spawns_stop_element);
 }
 
-/**
- * Check if there are no more daemons left.
- * @returns true if empty, false else.
- */
-bool
-spawns_empty(void) {
-	return spawns.root == NULL;
-}
-
-/**
- * End and reap a daemon.
- * @param element Daemon.
- */
-static void
-spawns_end_element(tree_element_t *element) {
-	struct daemon * const daemon = element;
-
-	daemon_end(daemon);
-
-	if (waitpid(daemon->pid, NULL, 0) == daemon->pid) {
-		daemon->state = DAEMON_STOPPED;
-		syslog(LOG_INFO, "Daemon '%s' (pid: %d) force-ended", daemon->name, daemon->pid);
-	} else {
-		syslog(LOG_ERR, "Error while ending daemon '%s': waitpid %d: %m", daemon->name, daemon->pid);
-	}
-}
-
-/**
- * Ending spawns left.
- */
+#ifndef NDEBUG
 void
-spawns_end(void) {
-	tree_mutate(&spawns, spawns_end_element);
-#ifdef CONFIG_MEMORY_CLEANUP
+spawns_cleanup(void) {
 	tree_deinit(&spawns);
+}
 #endif
-}
-
-/**
- * Register a running daemon.
- * @param daemon A daemon which must not be @ref DAEMON_STOPPED.
- */
-void
-spawns_record(struct daemon *daemon) {
-	tree_insert(&spawns, daemon);
-}
-
-/**
- * Retrieve a spawned daemon.
- * @param pid Pid of the running daemon, if any is associated.
- * @returns The daemon if spawned, _NULL_ if none found.
- */
-struct daemon *
-spawns_retrieve(pid_t pid) {
-	const struct daemon element = { .pid = pid };
-
-	return tree_remove(&spawns, &element);
-}

@@ -8,7 +8,7 @@
 
 /** State of the daemon, ensures only one spawns for each daemon. */
 enum daemon_state {
-	DAEMON_RUNNING,  /**< Has a pid, spawned. */
+	DAEMON_STARTED,  /**< Has a pid, spawned. */
 	DAEMON_STOPPED,  /**< Was cleared, no process running. */
 	DAEMON_STOPPING, /**< Sent a signal to shut it, spawned. */
 };

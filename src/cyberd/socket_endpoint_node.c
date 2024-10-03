@@ -10,6 +10,7 @@
 #include <stdlib.h> /* malloc, free */
 #include <syslog.h> /* syslog */
 #include <unistd.h> /* unlink, close */
+#include <fcntl.h> /* fcntl */
 #include <sys/socket.h> /* socket, bind, listen, ... */
 #include <sys/un.h> /* sockaddr_un */
 
@@ -36,6 +37,12 @@ socket_endpoint_node_operate(struct socket_node *snode) {
 	fd = accept(endpoint->super.fd, (struct sockaddr *)&addr, &len);
 	if (fd < 0) {
 		syslog(LOG_ERR, "socket_endpoint_node_operate: accept: %m");
+		return;
+	}
+
+	if (fcntl(fd, F_SETFD, FD_CLOEXEC) != 0) {
+		syslog(LOG_ERR, "socket_endpoint_node_operate: fcntl: %m");
+		close(fd);
 		return;
 	}
 
@@ -70,33 +77,33 @@ socket_endpoint_node_create(const char *name, capset_t capabilities) {
 		.operate = socket_endpoint_node_operate,
 		.destroy = socket_endpoint_node_destroy,
 	};
-	const int fd = socket(AF_LOCAL, SOCK_STREAM, 0);
-	struct sockaddr_un addr = { .sun_family = AF_LOCAL };
-	struct socket_endpoint_node *endpoint;
+	struct socket_endpoint_node * const endpoint = malloc(sizeof (*endpoint));
 
-	if (fd < 0) {
-		syslog(LOG_ERR, "socket_endpoint_node_create: socket %s: %m", name);
-		goto socket_endpoint_node_create_err0;
+	if (endpoint == NULL) {
+		goto malloc_failure;
 	}
 
+	const int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+	if (fd < 0) {
+		syslog(LOG_ERR, "socket_endpoint_node_create: socket %s: %m", name);
+		goto socket_failure;
+	}
+
+	struct sockaddr_un addr = { .sun_family = AF_UNIX };
 	const int namelen = snprintf(addr.sun_path, SOCKADDR_UN_MAXLEN, "%s/%s", socket_endpoints_path, name);
-	if (namelen < 0 || namelen >= SOCKADDR_UN_MAXLEN) {
+	if ((size_t)namelen >= SOCKADDR_UN_MAXLEN) {
 		syslog(LOG_ERR, "socket_endpoint_node_create '%s': Invalid name", name);
-		goto socket_endpoint_node_create_err1;
+		goto path_failure;
 	}
 
 	if (bind(fd, (const struct sockaddr *)&addr, sizeof (addr)) != 0) {
 		syslog(LOG_ERR, "socket_endpoint_node_create bind '%s': %m", name);
-		goto socket_endpoint_node_create_err1;
+		goto bind_failure;
 	}
 
 	if (listen(fd, CONFIG_SOCKET_ENDPOINTS_MAX_CONNECTIONS) != 0) {
 		syslog(LOG_ERR, "socket_endpoint_node_create listen '%s': %m", name);
-		goto socket_endpoint_node_create_err2;
-	}
-
-	if (endpoint = malloc(sizeof (*endpoint)), endpoint == NULL) {
-		goto socket_endpoint_node_create_err2;
+		goto listen_failure;
 	}
 
 	endpoint->super.class = &socket_endpoint_node_class;
@@ -104,10 +111,13 @@ socket_endpoint_node_create(const char *name, capset_t capabilities) {
 	endpoint->capabilities = capabilities;
 
 	return &endpoint->super;
-socket_endpoint_node_create_err2:
+listen_failure:
+bind_failure:
 	unlink(addr.sun_path);
-socket_endpoint_node_create_err1:
+path_failure:
 	close(fd);
-socket_endpoint_node_create_err0:
+socket_failure:
+	free(endpoint);
+malloc_failure:
 	return NULL;
 }

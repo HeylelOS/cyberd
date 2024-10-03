@@ -14,14 +14,11 @@ cyberd-objs:= \
 	src/cyberd/spawns.o \
 	src/cyberd/tree.o
 
-cyberctl-objs:=src/cyberctl/main.o
+cyberctl-objs:=src/cyberctl.o
 
 src/cyberd/daemon.o: CPPFLAGS+= \
 	-DCONFIG_DAEMON_DEFAULT_WORKDIR='"$(CONFIG_DAEMON_DEFAULT_WORKDIR)"' \
 	-DCONFIG_DAEMON_DEV_NULL='"$(CONFIG_DAEMON_DEV_NULL)"'
-ifneq ($(CONFIG_DAEMON_PROC_SELF_FD),)
-src/cyberd/daemon.o: CPPFLAGS+=-DCONFIG_DAEMON_PROC_SELF_FD=\"$(CONFIG_DAEMON_PROC_SELF_FD)\"
-endif
 
 src/cyberd/daemon_conf.o: CPPFLAGS+= \
 	-DCONFIG_DAEMON_CONF_DEFAULT_UMASK='0$(CONFIG_DAEMON_CONF_DEFAULT_UMASK)' \
@@ -32,11 +29,12 @@ src/cyberd/daemon_conf.o: CPPFLAGS+=-DCONFIG_DAEMON_CONF_HAS_RTSIG
 endif
 
 src/cyberd/main.o: CPPFLAGS+= \
+	-DCONFIG_REBOOT_TIMEOUT='$(CONFIG_REBOOT_TIMEOUT)' \
 	-DCONFIG_CONFIGURATION_PATH='"$(CONFIG_CONFIGURATION_PATH)"' \
 	-DCONFIG_SOCKET_ENDPOINTS_PATH='"$(CONFIG_SOCKET_ENDPOINTS_PATH)"' \
 	-DCONFIG_SOCKET_ENDPOINTS_ROOT='"$(CONFIG_SOCKET_ENDPOINTS_ROOT)"'
 ifneq ($(CONFIG_RC_PATH),)
-src/cyberd/main.o: CPPFLAGS+=-DCONFIG_RC_PATH=\"$(CONFIG_RC_PATH)\"
+src/cyberd/main.o: CPPFLAGS+=-DCONFIG_RC_PATH='"$(CONFIG_RC_PATH)"'
 endif
 
 src/cyberd/socket_connection_node.o: CPPFLAGS+= \
@@ -44,7 +42,7 @@ src/cyberd/socket_connection_node.o: CPPFLAGS+= \
 src/cyberd/socket_endpoint_node.o: CPPFLAGS+= \
 	-DCONFIG_SOCKET_ENDPOINTS_MAX_CONNECTIONS='$(CONFIG_SOCKET_ENDPOINTS_MAX_CONNECTIONS)'
 
-src/cyberctl/main.o: CPPFLAGS+= -I$(srcdir)/src/cyberd \
+src/cyberctl.o: CPPFLAGS+= -I$(srcdir)/src/cyberd \
 	-DCONFIG_SOCKET_ENDPOINTS_PATH='"$(CONFIG_SOCKET_ENDPOINTS_PATH)"' \
 	-DCONFIG_SOCKET_ENDPOINTS_ROOT='"$(CONFIG_SOCKET_ENDPOINTS_ROOT)"'
 
@@ -59,25 +57,24 @@ clean-up+=$(host-sbin) $(host-libexec) $(cyberd-objs) $(cyberctl-objs)
 # Functional tests #
 ####################
 
-ifeq ($(shell pkg-config --exists cover && echo $$?),0)
-TEST_CC?=$(CC)
-TEST_CFLAGS?=$(CFLAGS) $(shell pkg-config --cflags cover) -I$(srcdir)/src $(CPPFLAGS) $(LDFLAGS)
-TEST_LDLIBS?=$(LDLIBS) $(shell pkg-config --libs cover)
-
+ifneq ($(CONFIG_CHECK),)
 tests:=test/cyberd-tree
-checks:=$(tests:test/%=check-%)
 
 $(tests): %: %.c
-	$(v-e) TEST_CC $@
-	$(v-a) $(MKDIR) $(@D) && $(TEST_CC) $(TEST_CFLAGS) -o $@ $< $(TEST_LDLIBS)
+	$(v-e) TEST-CC $@
+	$(v-a) $(MKDIR) $(@D) && $(CC) -I$(srcdir)/src \
+		$(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ $< $(LDLIBS)
+
+checks:=$(tests:test/%=check-%)
+
+.PHONY: tests check $(checks)
 
 $(checks): check-%: test/%
 	$(v-e) CHECK $@
-	$(v-a) $< -pretty -
-
-.PHONY: check $(checks)
+	$(v-a) $<
 
 check: $(checks)
+tests: $(tests)
 
 clean-up+=$(tests)
 endif

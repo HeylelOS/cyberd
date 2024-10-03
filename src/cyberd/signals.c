@@ -1,21 +1,12 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 #include "signals.h"
 
-#include "configuration.h"
-#include "spawns.h"
-
-#include <stdlib.h> /* abort */
-#include <sys/reboot.h> /* reboot, RB_POWER_OFF, ... */
-#include <sys/wait.h> /* waitid, ... */
-#include <syslog.h> /* syslog */
+#include <sys/reboot.h> /* reboot */
 #include <assert.h> /* static_assert */
-#include <errno.h> /* errno */
+#include <unistd.h> /* alarm */
+#include <stddef.h> /* NULL */
 
-/**
- * Requested reboot action. Used in `src/cyberd/main.c` to check whether
- * termination is requested. Holds the value to use with _reboot(2)_.
- */
-int rebootcmd;
+volatile sig_atomic_t sigreboot, sigchld, sighup, sigalrm;
 
 /**
  * SIGTERM. Checks for additional informations from a potential _sigqueue(2)_
@@ -27,10 +18,10 @@ sigterm_handler(int, siginfo_t *siginfo, void *) {
 
 	/* Obviously, the @ref main loop is broken
 	 * if any one of these supported actions equals zero. */
-	static_assert(RB_AUTOBOOT != 0);
-	static_assert(RB_HALT_SYSTEM != 0);
-	static_assert(RB_POWER_OFF != 0);
-	static_assert(RB_SW_SUSPEND != 0);
+	static_assert (RB_AUTOBOOT != 0);
+	static_assert (RB_HALT_SYSTEM != 0);
+	static_assert (RB_POWER_OFF != 0);
+	static_assert (RB_SW_SUSPEND != 0);
 
 	if (siginfo->si_code == SI_QUEUE) {
 		const int value = siginfo->si_value.sival_int;
@@ -38,86 +29,42 @@ sigterm_handler(int, siginfo_t *siginfo, void *) {
 		switch (value) {
 		case RB_AUTOBOOT:    [[fallthrough]];
 		case RB_HALT_SYSTEM: [[fallthrough]];
-		case RB_POWER_OFF:   [[fallthrough]];
+		case RB_POWER_OFF:
+			sigreboot = value;
+			break;
 		case RB_SW_SUSPEND:
-			rebootcmd = value;
+			/* Unsupported suspend. */
 			break;
 		default:
-			syslog(LOG_ERR, "sigterm: Invalid reboot magic 0x%.8X", value);
+			/* Invalid reboot magic. */
+			break;
 		}
 	} else {
-		rebootcmd = RB_POWER_OFF;
+		sigreboot = RB_POWER_OFF;
 	}
-}
-
-/** SIGHUP handler, reload daemons configurations. */
-static void
-sighup_handler(int) {
-	configuration_reload();
 }
 
 /** SIGCHLD handler, child processes reaping. */
 static void
 sigchld_handler(int) {
-	siginfo_t info;
+	sigchld = 1;
+}
 
-	while (info.si_pid = 0, errno = 0, waitid(P_ALL, 0, &info, WEXITED | WNOHANG) == 0 && info.si_pid != 0) {
-		struct daemon * const daemon = spawns_retrieve(info.si_pid);
+/** SIGHUP handler, daemons configurations. */
+static void
+sighup_handler(int) {
+	sighup = 1;
+}
 
-		switch (info.si_code) {
-		case CLD_EXITED:
-			if (daemon != NULL) {
-				daemon->state = DAEMON_STOPPED;
-				syslog(LOG_INFO, "sigchld: '%s' (pid: %d) terminated with exit status %d", daemon->name, info.si_pid, info.si_status);
-
-				if (info.si_status == 0) {
-					if (daemon->conf.start.exitsuccess == 1) {
-						daemon_start(daemon);
-					}
-				} else if (daemon->conf.start.exitfailure == 1) {
-					daemon_start(daemon);
-				}
-			} else {
-				syslog(LOG_INFO, "sigchld: Orphan %d terminated with exit status %d", info.si_pid, info.si_status);
-			}
-			break;
-		case CLD_KILLED:
-			if (daemon != NULL) {
-				daemon->state = DAEMON_STOPPED;
-				syslog(LOG_INFO, "sigchld: '%s' (pid: %d) killed by signal %d", daemon->name, info.si_pid, info.si_status);
-
-				if (daemon->conf.start.killed == 1) {
-					daemon_start(daemon);
-				}
-			} else {
-				syslog(LOG_INFO, "sigchld: Orphan %d killed by signal %d", info.si_pid, info.si_status);
-			}
-			break;
-		case CLD_DUMPED:
-			if (daemon != NULL) {
-				daemon->state = DAEMON_STOPPED;
-				syslog(LOG_INFO, "sigchld: '%s' (pid: %d) dumped core", daemon->name, info.si_pid);
-
-				if (daemon->conf.start.dumped == 1) {
-					daemon_start(daemon);
-				}
-			} else {
-				syslog(LOG_INFO, "sigchld: Orphan %d dumped core", info.si_pid);
-			}
-			break;
-		default:
-			abort();
-		}
-	}
-
-	if (errno != 0) {
-		syslog(LOG_ERR, "sigchld waitid: %m");
-	}
+/** SIGALRM handler, teardown timeout alarm. */
+static void
+sigalrm_handler(int) {
+	sigalrm = 1;
 }
 
 /**
- * Setup all signal handlers, procmask, and returns @ref main loop's _pselect(2)_ mask.
- * @param[out] sigmaskp Signal mask used during @ref main loop's _pselect(2)_ call.
+ * Setup signal handlers, procmask, and returns @ref main loop's _pselect(2)_.
+ * @param[out] sigmaskp Signal mask used during @ref main loop's _pselect(2)_.
  */
 void
 signals_setup(sigset_t *sigmaskp) {
@@ -133,51 +80,59 @@ signals_setup(sigset_t *sigmaskp) {
 	 * and SIGSTOP, and we have no mean of knowing every system's signals from libc.
 	 */
 
-	/* Define blocked signals when not in pselect(2) */
+	/* Process signal mask. */
 	sigemptyset(sigmaskp);
 	sigaddset(sigmaskp, SIGTERM);
-	sigaddset(sigmaskp, SIGHUP);
 	sigaddset(sigmaskp, SIGCHLD);
+	sigaddset(sigmaskp, SIGHUP);
 	sigprocmask(SIG_SETMASK, sigmaskp, NULL);
 
-	/* Init signal handlers */
+	/* All signals blocked during signal handlers. */
 	sigfillset(&action.sa_mask);
 
+	/* SIGTERM needs SA_SIGINFO for sigqueue(3) value. */
 	action.sa_flags = SA_SIGINFO;
 	action.sa_sigaction = sigterm_handler;
 	sigaction(SIGTERM, &action, NULL);
 
-	action.sa_flags = SA_RESTART;
-
-	action.sa_handler = sighup_handler;
-	sigaction(SIGHUP, &action, NULL);
+	/* Neither SIGCHLD nor SIGHUP require SA_SIGINFO. */
+	action.sa_flags = 0;
 
 	action.sa_handler = sigchld_handler;
 	sigaction(SIGCHLD, &action, NULL);
 
-	/* Define pselect's non blocked signals */
-	sigfillset(sigmaskp);
-	sigdelset(sigmaskp, SIGTERM);
-	sigdelset(sigmaskp, SIGHUP);
-	sigdelset(sigmaskp, SIGCHLD);
+	action.sa_handler = sighup_handler;
+	sigaction(SIGHUP, &action, NULL);
+
+	/* Delivery signal mask. */
+	sigemptyset(sigmaskp);
 }
 
-/** Modify signal process mask to avoid being interrupted by SIGCHLD. */
+/**
+ * Timeout alarm.
+ * Sets the process mask to block SIGALRM,
+ * setup its signal handler and planify an alarm.
+ * @param[out] sigmaskp Signal mask used during @ref teardown loop's _sigsuspend(2)_.
+ */
 void
-signals_stopping(void) {
-	sigset_t unblock;
+signals_alarm(sigset_t *sigmaskp, unsigned int seconds) {
+	struct sigaction action;
+	sigset_t oldmask;
 
-	sigemptyset(&unblock);
-	sigaddset(&unblock, SIGCHLD);
-	sigprocmask(SIG_UNBLOCK, &unblock, NULL);
-}
+	/* Add SIGALRM to process signal mask. */
+	sigemptyset(sigmaskp);
+	sigaddset(sigmaskp, SIGALRM);
+	sigprocmask(SIG_BLOCK, sigmaskp, &oldmask);
 
-/** Re-mask SIGCHLD to reap remaining processes. */
-void
-signals_ending(void) {
-	sigset_t block;
+	/* Set SIGALRM signal handler. */
+	sigfillset(&action.sa_mask);
+	action.sa_handler = sigalrm_handler;
+	sigaction(SIGALRM, &action, NULL);
 
-	sigemptyset(&block);
-	sigaddset(&block, SIGCHLD);
-	sigprocmask(SIG_BLOCK, &block, NULL);
+	/* Set timeout alarm. */
+	alarm(seconds);
+
+	/* Delivery signal mask. */
+	sigdelset(&oldmask, SIGCHLD);
+	*sigmaskp = oldmask;
 }

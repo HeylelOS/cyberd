@@ -1,13 +1,15 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdnoreturn.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include <libgen.h>
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <err.h>
+#include <stdio.h> /* snprintf, fprintf */
+#include <stdlib.h> /* abort, exit */
+#include <string.h> /* memcpy, strcmp, ... */
+#include <stdnoreturn.h> /* noreturn */
+#include <arpa/inet.h> /* htonl */
+#include <unistd.h> /* getopt, write */
+#include <libgen.h> /* basename */
+#include <alloca.h> /* alloca */
+#include <sys/socket.h> /* socket */
+#include <sys/un.h> /* sockaddr_un */
+#include <err.h> /* err, errx, ... */
 
 #include "capabilities.h"
 
@@ -58,14 +60,15 @@ initctl_command_id(const char *command) {
 
 static int
 initctl_open(const char *endpoint) {
-	const int fd = socket(AF_LOCAL, SOCK_STREAM, 0);
-	struct sockaddr_un addr = { .sun_family = AF_LOCAL };
+	const int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+	struct sockaddr_un addr = { .sun_family = AF_UNIX };
 
 	if (fd < 0) {
 		err(EXIT_FAILURE, "Unable to create socket for endpoint '%s'", endpoint);
 	}
 
-	if (snprintf(addr.sun_path, sizeof (addr.sun_path), CONFIG_SOCKET_ENDPOINTS_PATH"/%s", endpoint) >= sizeof (addr.sun_path)) {
+	const int length = snprintf(addr.sun_path, sizeof (addr.sun_path), CONFIG_SOCKET_ENDPOINTS_PATH"/%s", endpoint);
+	if ((size_t)length >= sizeof (addr.sun_path)) {
 		errx(EXIT_FAILURE, "Endpoint name '%s' is too long", endpoint);
 	}
 
@@ -136,7 +139,7 @@ shutdown_main(int argc, char **argv) {
 	uint8_t id = COMMAND(SYSTEM_POWEROFF);
 	int c;
 
-	while (c = getopt(argc, argv, ":HPr"), c != -1) {
+	while ((c = getopt(argc, argv, ":HPr")) >= 0) {
 		switch (c) {
 		case 'H': id = COMMAND(SYSTEM_HALT);     break;
 		case 'P': id = COMMAND(SYSTEM_POWEROFF); break;
@@ -165,7 +168,7 @@ initctl_main(int argc, char **argv) {
 	uint8_t id;
 	int c;
 
-	while (c = getopt(argc, argv, ":c:"), c != -1) {
+	while ((c = getopt(argc, argv, ":c:")) >= 0) {
 		switch (c) {
 		case 'c':
 			endpoint = optarg;
@@ -234,7 +237,7 @@ initctl_main(int argc, char **argv) {
 }
 
 int
-main(int argc, char **argv) {
+main(int argc, char *argv[]) {
 	static const char * const synopses[] = {
 		[SYNOPSIS_HALT]     = "halt",
 		[SYNOPSIS_REBOOT]   = "reboot",
@@ -246,7 +249,8 @@ main(int argc, char **argv) {
 	uint8_t id;
 
 	*argv = basename(*argv);
-	while (synopsis < sizeof (synopses) / sizeof (*synopses) && strcmp(*argv, synopses[synopsis]) != 0) {
+	while (synopsis < sizeof (synopses) / sizeof (*synopses)
+		&& strcmp(*argv, synopses[synopsis]) != 0) {
 		synopsis++;
 	}
 

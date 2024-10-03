@@ -3,8 +3,7 @@
 
 #include "spawns.h"
 
-#include <stdlib.h> /* free, exit, ... */
-#include <stdint.h> /* INT32_MAX */
+#include <stdlib.h> /* abort, free, malloc */
 #include <stdnoreturn.h> /* noreturn */
 #include <sys/resource.h> /* setpriority */
 #include <sys/stat.h> /* umask */
@@ -14,12 +13,7 @@
 #include <string.h> /* strdup */
 #include <alloca.h> /* alloca */
 #include <fcntl.h> /* open */
-#include <errno.h> /* errno */
-#include <err.h> /* err, warn, ... */
-
-#ifdef CONFIG_DAEMON_PROC_SELF_FD
-#include <dirent.h> /* opendir, ... */
-#endif
+#include <err.h> /* err */
 
 /**
  * Empty signal procmask of the current process.
@@ -37,57 +31,6 @@ daemon_child_sigprocmask(void) {
 	}
 
 	return 0;
-}
-
-/**
- * Closes all non-std opened file descriptors of the current process.
- */
-static int
-daemon_child_close_nonstd(void) {
-#ifdef CONFIG_DAEMON_PROC_SELF_FD
-	static const char path[] = CONFIG_DAEMON_PROC_SELF_FD;
-	DIR * const dirp = opendir(path);
-	int ret = 0;
-
-	if (dirp != NULL) {
-		struct dirent *entry;
-		char *end;
-
-		while (errno = 0, entry = readdir(dirp), entry != NULL) {
-			unsigned long fd = strtoul(entry->d_name, &end, 10);
-
-			if (*end == '\0' && fd <= INT32_MAX
-				&& fd > STDERR_FILENO && fd != dirfd(dirp)) {
-				close((int)fd);
-			}
-		}
-
-		if (errno != 0) {
-			warn("readdir");
-			ret = -1;
-		}
-
-		closedir(dirp);
-	} else {
-		warn("opendir '%s'", path);
-		ret = -1;
-	}
-
-	return ret;
-#else
-	const int fdmax = (int)sysconf(_SC_OPEN_MAX); /* Truncation should not be a problem here */
-
-	if (fdmax < 0) {
-		warn("sysconf _SC_OPEN_MAX");
-		return -1;
-	}
-
-	for (int fd = STDERR_FILENO + 1; fd <= fdmax; fd++) {
-		close(fd);
-	}
-
-	return 0;
-#endif
 }
 
 /**
@@ -135,23 +78,23 @@ daemon_child_setup(const char *name, const struct daemon_conf *conf) {
 	 * Opening standard file descriptors *
 	 *************************************/
 
-	infd = open(in, O_RDONLY);
+	infd = open(in, O_RDONLY | O_CLOEXEC);
 	if (infd < 0) {
 		err(-1, "open '%s'", in);
 	}
 
-	outfd = open(out, O_WRONLY);
+	outfd = open(out, O_WRONLY | O_CLOEXEC);
 	if (outfd < 0) {
 		err(-1, "open '%s'", out);
 	}
 
 	if (conf->err != NULL) {
-		errfd = open(conf->err, O_WRONLY);
+		errfd = open(conf->err, O_WRONLY | O_CLOEXEC);
 		if (errfd < 0) {
 			err(-1, "open '%s'", conf->err);
 		}
 	} else {
-		errfd = dup(outfd);
+		errfd = outfd;
 	}
 
 	/**************************************
@@ -182,10 +125,6 @@ daemon_child_setup(const char *name, const struct daemon_conf *conf) {
 
 	if (daemon_child_sigprocmask() < 0) {
 		err(-1, "daemon_child_sigprocmask");
-	}
-
-	if (daemon_child_close_nonstd() < 0) {
-		err(-1, "daemon_child_close_nonstd");
 	}
 
 	/**************************************
@@ -232,7 +171,7 @@ daemon_spawn(struct daemon *daemon) {
 		daemon_child_setup(daemon->name, &daemon->conf);
 	default: /* success-parent */
 		daemon->pid = pid;
-		daemon->state = DAEMON_RUNNING;
+		daemon->state = DAEMON_STARTED;
 		spawns_record(daemon);
 		return 0;
 	}
@@ -246,23 +185,25 @@ daemon_spawn(struct daemon *daemon) {
 struct daemon *
 daemon_create(const char *name) {
 	struct daemon * const daemon = malloc(sizeof (*daemon));
-	char * const dupped = strdup(name);
 
-	if (daemon != NULL && dupped != NULL) {
-
-		daemon->state = DAEMON_STOPPED;
-
-		daemon->name = dupped;
-		daemon->pid = 0;
-
-		daemon_conf_init(&daemon->conf);
-
-		return daemon;
-	} else {
-		free(daemon);
-		free(dupped);
-		return NULL;
+	if (daemon == NULL) {
+		goto malloc_failure;
 	}
+
+	char * const copy = strdup(name);
+	if (copy == NULL) {
+		goto strdup_failure;
+	}
+
+	daemon->state = DAEMON_STOPPED;
+	daemon->name = copy;
+	daemon_conf_init(&daemon->conf);
+
+	return daemon;
+strdup_failure:
+	free(daemon);
+malloc_failure:
+	return NULL;
 }
 
 /**
@@ -274,7 +215,7 @@ void
 daemon_destroy(struct daemon *daemon) {
 
 	if (daemon->state != DAEMON_STOPPED) {
-		/* Remove daemon index in spawns if previously spawned */
+		/* Remove daemon index in spawns if previously spawned. */
 		spawns_retrieve(daemon->pid);
 	}
 	free(daemon->name);
@@ -292,7 +233,7 @@ void
 daemon_start(struct daemon *daemon) {
 
 	switch (daemon->state) {
-	case DAEMON_RUNNING:
+	case DAEMON_STARTED:
 		syslog(LOG_INFO, "daemon_start: '%s' already started", daemon->name);
 		break;
 	case DAEMON_STOPPED:
@@ -311,14 +252,14 @@ daemon_start(struct daemon *daemon) {
 }
 
 /**
- * Send the finish signal if DAEMON_RUNNING, and set it to DAEMON_STOPPING.
+ * Send the finish signal if DAEMON_STARTED, and set it to DAEMON_STOPPING.
  * @param daemon Daemon to stop
  */
 void
 daemon_stop(struct daemon *daemon) {
 
 	switch (daemon->state) {
-	case DAEMON_RUNNING:
+	case DAEMON_STARTED:
 		syslog(LOG_INFO, "daemon_stop: '%s' stopping with signal %d", daemon->name, daemon->conf.sigfinish);
 		kill(daemon->pid, daemon->conf.sigfinish);
 		daemon->state = DAEMON_STOPPING;
@@ -342,7 +283,7 @@ void
 daemon_reload(struct daemon *daemon) {
 
 	switch (daemon->state) {
-	case DAEMON_RUNNING:
+	case DAEMON_STARTED:
 		syslog(LOG_INFO, "daemon_reload: '%s' reloading with signal %d", daemon->name, daemon->conf.sigreload);
 		kill(daemon->pid, daemon->conf.sigreload);
 		break;
@@ -365,18 +306,18 @@ void
 daemon_end(struct daemon *daemon) {
 
 	switch (daemon->state) {
-	case DAEMON_RUNNING:
+	case DAEMON_STARTED:
 		syslog(LOG_INFO, "daemon_end: '%s' was running, ending...", daemon->name);
-		kill(daemon->pid, SIGKILL);
 		break;
 	case DAEMON_STOPPED:
 		syslog(LOG_INFO, "daemon_end: '%s' is stopped", daemon->name);
-		break;
+		return;
 	case DAEMON_STOPPING:
 		syslog(LOG_INFO, "daemon_end: '%s' ending...", daemon->name);
-		kill(daemon->pid, SIGKILL);
 		break;
 	default:
 		abort();
 	}
+
+	kill(daemon->pid, SIGKILL);
 }

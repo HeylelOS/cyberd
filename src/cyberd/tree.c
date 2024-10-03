@@ -32,7 +32,8 @@ tree_node_balance(const struct tree_node *node) {
 
 static void
 tree_node_rotate_right(struct tree_node **nodep) {
-	struct tree_node * const node = *nodep, * const node2 = node->left;
+	struct tree_node * const node = *nodep;
+	struct tree_node * const node2 = node->left;
 
 	node->left = node2->right;
 	node2->right = node;
@@ -45,7 +46,8 @@ tree_node_rotate_right(struct tree_node **nodep) {
 
 static void
 tree_node_rotate_left(struct tree_node **nodep) {
-	struct tree_node * const node = *nodep, * const node2 = node->right;
+	struct tree_node * const node = *nodep;
+	struct tree_node * const node2 = node->right;
 
 	node->right = node2->left;
 	node2->left = node;
@@ -90,7 +92,6 @@ tree_node_insert(struct tree_node **rootp, struct tree_node *node, int (* const 
 		const int comparison = compare(node->element, root->element);
 
 		if (comparison < 0) {
-
 			tree_node_insert(&root->left, node, compare);
 
 			if (tree_node_balance(root) == -2) {
@@ -101,7 +102,6 @@ tree_node_insert(struct tree_node **rootp, struct tree_node *node, int (* const 
 				}
 			}
 		} else if (comparison > 0) {
-
 			tree_node_insert(&root->right, node, compare);
 
 			if (tree_node_balance(root) == 2) {
@@ -173,15 +173,22 @@ tree_node_remove(struct tree_node **rootp, const tree_element_t *element, int (*
 	}
 
 	if (root != NULL) {
-		root->height = max(tree_node_height(root->left), tree_node_height(root->right)) + 1;
+		const int height_left = tree_node_height(root->left),
+			height_right = tree_node_height(root->right);
+		const int balance = height_right - height_left;
 
-		if (tree_node_balance(root) > 1) {
+		assert(root->left != NULL || balance >= 0);
+		assert(root->right != NULL || balance <= 0);
+
+		root->height = max(height_left, height_right) + 1;
+
+		if (balance > 1) {
 			if (tree_node_balance(root->right) >= 0) {
 				tree_node_rotate_left(&root);
 			} else {
 				tree_node_rotate_right_left(&root);
 			}
-		} else if (tree_node_balance(root) < -1) {
+		} else if (balance < -1) {
 			if (tree_node_balance(root->left) <= 0) {
 				tree_node_rotate_right(&root);
 			} else {
@@ -279,7 +286,7 @@ tree_find(struct tree *tree, const tree_element_t *element) {
 	struct tree_node *current = tree->root;
 	int comparison;
 
-	while (current != NULL && (comparison = tree->compare(element, current->element), comparison != 0)) {
+	while (current != NULL && (comparison = tree->compare(element, current->element)) != 0) {
 		if (comparison < 0) {
 			current = current->left;
 		} else {
@@ -301,7 +308,6 @@ tree_last(struct tree *tree) {
 	struct tree_node *current = tree->root;
 
 	if (current != NULL) {
-
 		while (current->right != NULL) {
 			current = current->right;
 		}

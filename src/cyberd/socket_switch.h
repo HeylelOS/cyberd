@@ -19,7 +19,7 @@ void
 socket_switch_remove(struct socket_node *snode);
 
 int
-socket_switch_prepare(fd_set **readfdsp, fd_set **writefdsp, fd_set **exceptfdsp);
+socket_switch_prepare(fd_set **readfdsp);
 
 void
 socket_switch_operate(int nfds);

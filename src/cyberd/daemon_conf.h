@@ -26,12 +26,12 @@ struct daemon_conf {
 	int priority; /**< Scheduling priority of the daemon */
 
 	struct {
-		unsigned load : 1;        /**< Must be started at configuration load */
-		unsigned reload : 1;      /**< Must be started at configuration reload */
-		unsigned exitsuccess : 1; /**< Must be started when it stopped successfully */
-		unsigned exitfailure : 1; /**< Must be started when it stopped unsuccessfully */
-		unsigned killed : 1;      /**< Must be started when it was stopped by a signal */
-		unsigned dumped : 1;      /**< Must be started when it dumped core */
+		unsigned int load : 1;        /**< Must be started at configuration load */
+		unsigned int reload : 1;      /**< Must be started at configuration reload */
+		unsigned int exitsuccess : 1; /**< Must be started when it stopped successfully */
+		unsigned int exitfailure : 1; /**< Must be started when it stopped unsuccessfully */
+		unsigned int killed : 1;      /**< Must be started when it was stopped by a signal */
+		unsigned int dumped : 1;      /**< Must be started when it dumped core */
 	} start; /**< Bitmask holding when a daemon wants to be started */
 };
 

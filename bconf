@@ -1,3 +1,7 @@
+config CHECK
+	"Enable compilation and running of tests (optional)"
+	defaults "1"
+
 config RC_PATH
 	"Run commands executable path (optional)"
 	defaults "$(sysconfdir)/rc"
@@ -6,6 +10,10 @@ config CONFIGURATION_PATH
 	"Daemon configuration files directory path"
 	defaults "$(sysconfdir)/daemons"
 
+config REBOOT_TIMEOUT
+	"Timeout before killing all remaining processes, in seconds"
+	defaults "5"
+
 config DAEMON_DEFAULT_WORKDIR
 	"Daemons default working directory"
 	defaults "/"
@@ -13,10 +21,6 @@ config DAEMON_DEFAULT_WORKDIR
 config DAEMON_DEV_NULL
 	"Path of the /dev/null device"
 	defaults "/dev/null"
-
-config DAEMON_PROC_SELF_FD
-	"Path of the procfs opened fd directory for the current process (optional)"
-	defaults "/proc/self/fd"
 
 config DAEMON_CONF_DEFAULT_UMASK
 	"Daemon configuration default umask"
