@@ -80,10 +80,10 @@ initctl_open(const char *endpoint) {
 }
 
 static void noreturn
-initctl_endpoint_create(const char *endpoint, uint8_t id, capset_t restricted, const char *name) {
+initctl_endpoint_create(const char *endpoint, uint8_t id, capset_t capabilities, const char *name) {
 	struct [[gnu::packed]] {
 		uint8_t id;
-		uint32_t restricted;
+		uint32_t capabilities;
 		char name[];
 	} *message;
 	const size_t namelen = strlen(name);
@@ -92,7 +92,7 @@ initctl_endpoint_create(const char *endpoint, uint8_t id, capset_t restricted, c
 
 	message = alloca(messagesize);
 	message->id = id;
-	message->restricted = htonl(restricted);
+	message->capabilities = htonl(capabilities);
 	memcpy(message->name, name, namelen + 1);
 
 	if (write(fd, message, messagesize) != messagesize) {
@@ -190,7 +190,7 @@ initctl_main(int argc, char **argv) {
 	id = initctl_command_id(argv[optind]);
 
 	if (id == COMMAND(ENDPOINT_CREATE)) {
-		capset_t kept = 0;
+		capset_t capabilities = 0;
 
 		if (argc - optind < 3) {
 			warnx("Missing arguments for endpoint creation");
@@ -202,14 +202,14 @@ initctl_main(int argc, char **argv) {
 			const capset_t capability = 1 << initctl_command_id(command);
 
 			if ((capability & CAPSET_ALL) == 0) {
-				warnx("Invalid kept command command '%s'", command);
+				warnx("Invalid capability command '%s'", command);
 				initctl_usage(*argv);
 			}
 
-			kept |= capability;
+			capabilities |= capability;
 		}
 
-		initctl_endpoint_create(endpoint, id, kept ^ CAPSET_ALL, argv[optind + 1]);
+		initctl_endpoint_create(endpoint, id, capabilities, argv[optind + 1]);
 	}
 
 	if (id <= COMMAND(DAEMON_END)) {

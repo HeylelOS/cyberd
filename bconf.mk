@@ -53,6 +53,35 @@ host-libexec+=cyberd
 host-sbin+=cyberctl
 clean-up+=$(host-sbin) $(host-libexec) $(cyberd-objs) $(cyberctl-objs)
 
+################
+# Manual pages #
+################
+
+ifneq ($(CONFIG_MANPAGES),)
+man1dir:=$(mandir)/man1
+man5dir:=$(mandir)/man5
+man8dir:=$(mandir)/man8
+
+host-man:=man/cyberctl.1 man/cyberd.5 man/cyberd.8
+
+.PHONY: install-man uninstall-man
+
+install-data: install-man
+uninstall-data: uninstall-man
+install-man: $(host-man)
+	$(v-e) INSTALL $(host-man)
+	$(v-a) $(INSTALL) -d -- "$(DESTDIR)$(man1dir)" "$(DESTDIR)$(man5dir)" "$(DESTDIR)$(man8dir)"
+	$(v-a) $(INSTALL-DATA) -- $(filter %.1,$^) "$(DESTDIR)$(man1dir)"
+	$(v-a) $(INSTALL-DATA) -- $(filter %.5,$^) "$(DESTDIR)$(man5dir)"
+	$(v-a) $(INSTALL-DATA) -- $(filter %.8,$^) "$(DESTDIR)$(man8dir)"
+uninstall-man:
+	$(v-e) UNINSTALL $(host-man)
+	$(v-a) $(RM) -- \
+		 $(patsubst %.1,"$(DESTDIR)$(man1dir)/%.1",$(filter %.1,$(notdir $(host-man)))) \
+		 $(patsubst %.5,"$(DESTDIR)$(man5dir)/%.5",$(filter %.5,$(notdir $(host-man)))) \
+		 $(patsubst %.8,"$(DESTDIR)$(man8dir)/%.8",$(filter %.8,$(notdir $(host-man))))
+endif
+
 ####################
 # Functional tests #
 ####################

@@ -22,7 +22,7 @@ struct parser {
 	capset_t capabilities; /**< Capabilities of our connection. */
 	enum parser_state {
 		PARSER_STATE_COMMAND,
-		PARSER_STATE_ENDPOINT_CREATE_RESTRICTED,
+		PARSER_STATE_ENDPOINT_CREATE_CAPABILITIES,
 		PARSER_STATE_ENDPOINT_CREATE_NAME,
 		PARSER_STATE_DAEMON_START_NAME,
 		PARSER_STATE_DAEMON_STOP_NAME,
@@ -35,9 +35,9 @@ struct parser {
 			struct {
 				uint32_t word; /**< Previously parsed bytes */
 				unsigned int size; /**< How many bytes already parsed. */
-			} restricted;
+			} capabilities;
 			struct {
-				capset_t restricted; /**< Previously parsed restricted capabilities set. */
+				capset_t capabilities; /**< Previously parsed capabilities set. */
 				unsigned int len; /**< Current Length of name. */
 				char buf[NAME_MAX + 1]; /**< Name of the endpoint being created. */
 			} name;
@@ -74,9 +74,9 @@ parser_feed_command(struct parser *parser, capset_t capability) {
 	if (CAPSET_HAS(parser->capabilities, capability)) {
 		switch (capability) {
 		case CAPABILITY_ENDPOINT_CREATE:
-			parser->state = PARSER_STATE_ENDPOINT_CREATE_RESTRICTED;
-			parser->endpoint.restricted.word = 0;
-			parser->endpoint.restricted.size = 0;
+			parser->state = PARSER_STATE_ENDPOINT_CREATE_CAPABILITIES;
+			parser->endpoint.capabilities.word = 0;
+			parser->endpoint.capabilities.size = 0;
 			break;
 		case CAPABILITY_DAEMON_START:
 			parser->state = PARSER_STATE_DAEMON_START_NAME;
@@ -134,7 +134,7 @@ parser_feed_endpoint_create_name(struct parser *parser, const char **bufferp, si
 	}
 
 	if (parser->endpoint.name.buf[parser->endpoint.name.len - 1] == '\0') {
-		const capset_t capabilities = parser->capabilities ^ parser->endpoint.name.restricted;
+		const capset_t capabilities = parser->capabilities & parser->endpoint.name.capabilities;
 		const char * const name = parser->endpoint.name.buf;
 
 		if (capabilities != 0 && *name != '\0' && *name != '.') {
@@ -177,12 +177,12 @@ parser_feed(struct parser *parser, const char *buffer, size_t count) {
 			buffer++;
 			count--;
 			break;
-		case PARSER_STATE_ENDPOINT_CREATE_RESTRICTED:
-			parser->endpoint.restricted.word = (parser->endpoint.restricted.word << 8) | (unsigned char)*buffer;
-			parser->endpoint.restricted.size++;
-			if (parser->endpoint.restricted.size == sizeof (parser->endpoint.restricted.word)) {
+		case PARSER_STATE_ENDPOINT_CREATE_CAPABILITIES:
+			parser->endpoint.capabilities.word = (parser->endpoint.capabilities.word << 8) | (unsigned char)*buffer;
+			parser->endpoint.capabilities.size++;
+			if (parser->endpoint.capabilities.size == sizeof (parser->endpoint.capabilities.word)) {
 				parser->state = PARSER_STATE_ENDPOINT_CREATE_NAME;
-				parser->endpoint.name.restricted = ntohl(parser->endpoint.restricted.word) & parser->capabilities;
+				parser->endpoint.name.capabilities = ntohl(parser->endpoint.capabilities.word);
 				parser->endpoint.name.len = 0;
 			}
 			buffer++;

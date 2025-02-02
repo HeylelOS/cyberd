@@ -1,0 +1,29 @@
+.Dd February 1, 2025
+.Dt CYBERD 8
+.Os
+.Sh NAME
+.Nm cyberd
+.Nd init process
+.Sh DESCRIPTION
+.Nm
+is an init process meant for
+.At
+like operating systems.
+It is neither a
+.At V
+like nor a
+.Bx
+like init system.
+It only supports daemons, and starts them upon configuration-load/reload.
+Each daemon is associated with a file in the configuration directory.
+Only one instance of a daemon can run at any time, and through
+.Xr cyberctl 1 ,
+you may start stop or end it.
+.Sh FEATURES
+.Nm
+was designed to be a daemon-leader as an init process. Its lack of other functionalities is intended by design.
+.Sh SEE ALSO
+.Xr cyberctl 1 , Xr cyberd 5 .
+.Sh AUTHORS
+Written by
+.An Valentin Debon Aq Mt valentin.debon@heylelos.org .

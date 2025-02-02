@@ -2,6 +2,10 @@ config CHECK
 	"Enable compilation and running of tests (optional)"
 	defaults "1"
 
+config MANPAGES
+	"Enable installation of manpages (optional)"
+	defaults "1"
+
 config RC_PATH
 	"Run commands executable path (optional)"
 	defaults "$(sysconfdir)/rc"

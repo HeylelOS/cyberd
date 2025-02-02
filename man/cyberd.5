@@ -1,0 +1,104 @@
+.Dd February 1, 2025
+.Dt CYBERD 5
+.Os
+.Sh NAME
+.Nm cyberd
+.Nd init daemons configuration files
+.Sh DESCRIPTION
+Daemons configurations file follow an INI-like syntax.
+.Pp
+They are separated into sections. Three sections are available:
+.Sy general ,
+.Sy environment
+and
+.Sy start .
+.Pp
+All file starts in the
+.Sy general
+section by default, you can enter a section by writing
+.Ic Bq Ar section name
+in a line. All following lines will concern this section until another section is specified.
+.Pp
+Each line which is not a section specification is either a scalar value, or an associative value. Scalar values consist of any line without an '=' character. Whereas assocative values are in the form
+.Ic Ar identifier Cm = Ar value .
+.Pp
+Comments can start anywhere on a line with the '#' character, ending on the end of the line and not impacting the content. Also note associative values, scalar values and section names are trimmed for spaces.
+.Sh GENERAL SECTION
+.Bl -tag
+.It Ic arguments = Ar argument list
+Argument list of the process, if not present, the first argument will be the daemon's name. The list is truncated according to spaces.
+.It Ic group = Ar name or id
+Group name or id of the daemon, defaults to 0.
+.It Ic nosid
+By default,
+.Xr setsid 2
+is called for each daemon, setting nosid keeps
+.Nm
+session.
+.It Ic path = Ar absolute path
+Path to the daemon executable file,
+.Sy MUST
+be specified.
+.It Ic priority = Ar priority
+Priority of the newly created daemon, must be between -20 and 19 inclusive, defaults to 0.
+.It Ic sigfinish = Ar signal name or number
+Signal used to terminate the daemon, defaults to SIGTERM.
+.It Ic sigreload = Ar signal name or number
+Signal used to reload the daemon's configuration, defaults to SIGHUP.
+.It Ic stdin = Ar absolute path
+Absolute path of a file opened read-only as stdin, defaults to /dev/null.
+.It Ic stdout = Ar absolute path
+Absolute path of a file opened write-only
+.Pq no truncate, append nor creat
+as stdout, defaults to /dev/null.
+.It Ic stderr = Ar absolute path
+Absolute path of a file opened write-only
+.Pq no truncate, append nor creat
+as stderr, if not specified, stderr is a
+.Xr dup 2
+of stdout.
+.It Ic umask = Ar octal numeric value
+umask of the daemon, defaults to
+.Nm
+one
+.Pq 022 .
+.It Ic user = Ar name or id
+User name or id of the daemon, defaults to 0.
+.It Ic workdir = Ar absolute path
+Where the daemon will be executed
+.Pq Xr chdir 2
+defaults to /.
+.Sh START SECTION
+.Bl -tag
+.It Ic any exit
+Start the daemon when the daemon exited in any way.
+.It Ic dumped
+Start the daemon when the daemon dumped core.
+.It Ic exit failure
+Start the daemon when the daemon exited with
+.Xr _exit 2
+with an exit code not equal to 0.
+.It Ic exit success
+Start the daemon when the daemon exited with
+.Xr _exit 2
+with exit code 0.
+.It Ic exit
+Start the daemon when the daemon exited with
+.Xr _exit 2 .
+.It Ic killed
+Start the daemon when the daemon was killed by a signal.
+.It Ic load
+Start the daemon when
+.Nm
+is starting.
+.It Ic reload
+Start the daemon when
+.Nm
+is reloading its configuration.
+.Sh ENVIRONMENT SECTION
+The environment section is composed of associated values, any scalar value will be expanded to an associative value with itself, and will compose the daemon's environment variables.
+.Sh SEE ALSO
+.Xr cyberctl 1 , Xr chdir 2 , Xr _exit 2 , Xr umask 2 , Xr setsid 2 , Xr isspace 3 , Xr signal 7 , Xr cyberd 8 .
+.Sh AUTHORS
+Written by
+.An Valentin Debon Aq Mt valentin.debon@heylelos.org .

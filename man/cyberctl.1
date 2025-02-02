@@ -1,0 +1,31 @@
+.Dd February 1, 2025
+.Dt CYBERCTL 1
+.Os
+.Sh NAME
+.Nm cyberctl
+.Nd send commands to a cyberd init instance
+.Sh SYNOPSIS
+.Nm cyberctl
+.Op Fl c Ar endpoint
+.Cm start|stop|reload|end
+.Ar daemon ...
+.Nm cyberctl
+.Op Fl c Ar endpoint
+.Cm poweroff|halt|reboot|suspend
+.Nm cyberctl
+.Op Fl c Ar endpoint
+.Cm create-endpoint
+.Ar command ...
+.Sh DESCRIPTION
+With
+.Nm
+you can start, stop, reload or force-end a daemon. Depending on support, you can also poweroff, halt, reboot or suspend your system.
+.Pp
+You can also create a new endpoint to communicate with
+.Xr cyberd 8
+and specify authorized commands for said new endpoint. This allows creations of less-priviliged endpoints.
+.Sh SEE ALSO
+.Xr cyberd 5 , Xr cyberd 8 .
+.Sh AUTHORS
+Written by
+.An Valentin Debon Aq Mt valentin.debon@heylelos.org .
